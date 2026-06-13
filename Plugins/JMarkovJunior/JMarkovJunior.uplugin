@@ -1,0 +1,23 @@
+﻿{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "JMarkovJunior",
+	"Description": "Unreal 5 wrapper for the Julia remake of MarkovJunior",
+	"Category": "Programming",
+	"CreatedBy": "William Mishra-Manning",
+	"CreatedByURL": "github.com/heyx3",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "JMarkovJunior",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

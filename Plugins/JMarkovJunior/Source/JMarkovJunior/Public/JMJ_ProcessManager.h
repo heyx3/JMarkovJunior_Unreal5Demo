@@ -92,7 +92,13 @@ public:
 	virtual TStatId GetStatId() const override { RETURN_QUICK_DECLARE_CYCLE_STAT(UJmjProcessManager, STATGROUP_Tickables); }
 	virtual void Tick(float deltaSeconds) override;
 	///////
-	
+
+	//Tries to parse a new MarkovJunior algorithm instance.
+	//If it fails, then an error message will be provided.
+	UFUNCTION(BlueprintCallable, Category="JMarkovJunior")
+	void ParseAlgorithm(const FString& sourceCode,
+						bool& succeeded, FString& outErrMsg, FJmjParsedAlgo& outAlgo);
+
 private:
 	
 	FProcHandle process;

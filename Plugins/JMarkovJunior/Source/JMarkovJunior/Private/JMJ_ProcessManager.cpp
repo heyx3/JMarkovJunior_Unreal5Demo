@@ -8,6 +8,22 @@
 #include "jmj_ipc.hpp"
 
 
+namespace
+{
+	template<typename T>
+	void NPWrite(FGenericPlatformNamedPipe& pipe, const T& value, int count = 1)
+	{
+		pipe.WriteBytes(sizeof(T) * count, &value);
+	}
+	template<typename T>
+	T NPRead(FGenericPlatformNamedPipe& pipe)
+	{
+		T output;
+		verify(pipe.ReadBytes(sizeof(T), &output));
+		return output;
+	}
+}
+
 std::span<FJmjCellType> UJmjConstants::GetCellTypes()
 {
 	static auto lookup = []() {
@@ -99,6 +115,9 @@ void UJmjProcessManager::PollProcess()
 	};
 	auto flushStderr = [&]()
 	{
+		if (stderrFromHere == nullptr)
+			return;
+		
 		//Drain the pipe.
 		int firstNewByte = stderrBuffer.Num();
 		FPlatformProcess::ReadPipeToArray(stderrFromHere, stderrBuffer);
@@ -128,10 +147,12 @@ void UJmjProcessManager::PollProcess()
 
 			//Move on to the next line.
 			lastNewline = newlineIdx;
-			foundNewline = Algo::Find(
-				std::span{ &stderrBuffer[lastNewline + 1], static_cast<size_t>(stderrBuffer.Num() - lastNewline) },
-				static_cast<uint8>('\n')
-			);
+			foundNewline = (lastNewline == stderrBuffer.Num() - 1) ?
+				nullptr :
+				Algo::Find(
+					std::span{ &stderrBuffer[lastNewline + 1], static_cast<size_t>(stderrBuffer.Num() - lastNewline) },
+					static_cast<uint8>('\n')
+				);
 		}
 
 		//Clear the buffer up to the last newline.
@@ -146,6 +167,8 @@ void UJmjProcessManager::PollProcess()
 		break;
 	
 		case ProcState::Booting:
+			flushStderr();
+		
 			//Look for the "ready for clients" signal.
 			FPlatformProcess::ReadPipeToArray(stdoutFromHere, stdoutBuffer);
 			//  (note: the above function returns whether any new bytes were read in)
@@ -172,13 +195,14 @@ void UJmjProcessManager::PollProcess()
 					CleanUpProcessHandles();
 				}
 			}
-			else if (!checkProcSuddenDeath())
+			else
 			{
-				flushStderr();
+				checkProcSuddenDeath();
 			}
 		break;
 		
 		case ProcState::Ready:
+			flushStderr();
 			//Look for the "no more clients" signal.
 			FPlatformProcess::ReadPipeToArray(stdoutFromHere, stdoutBuffer);
 			if (stdoutBuffer.Num() >= 4)
@@ -192,22 +216,19 @@ void UJmjProcessManager::PollProcess()
 				procState = ProcState::Dying;
 				UE_LOG(LogJMarkovJunior, Log, TEXT("IPC process announced it is rejecting new clients (shutting down)"));
 			}
-			else if (!checkProcSuddenDeath())
+			else
 			{
-				flushStderr();
+				checkProcSuddenDeath();
 			}
 		break;
 		
 		case ProcState::Dying:
+			flushStderr();
 			if (!FPlatformProcess::IsProcRunning(process))
 			{
 				procState = ProcState::Dead;
 				UE_LOG(LogJMarkovJunior, Log, TEXT("IPC process has died"));
 				CleanUpProcessHandles();
-			}
-			else
-			{
-				flushStderr();
 			}
 		break;
 		
@@ -233,4 +254,12 @@ void UJmjProcessManager::CleanUpProcessHandles()
 		stderrFromHere = nullptr;
 		process.Reset();
 	}
+}
+
+void UJmjProcessManager::ParseAlgorithm(const FString& sourceCode,
+										bool& succeeded, FString& outErrMsg, FJmjParsedAlgo& outAlgo)
+{
+	NPWrite(*namedPipe, uint32_t{ 1 });
+	//TODO: Implement
+	check(false);
 }

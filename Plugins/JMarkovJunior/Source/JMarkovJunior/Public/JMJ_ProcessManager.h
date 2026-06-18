@@ -10,7 +10,7 @@
 
 
 USTRUCT(BlueprintType)
-struct FJmIntVector2D
+struct FJmjIntVector2D
 {
 	GENERATED_BODY()
 public:
@@ -20,9 +20,9 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	int Y = 0;
 
-	bool operator==(const FJmIntVector2D& v) const { return X == v.X && Y == v.Y; }
+	bool operator==(const FJmjIntVector2D& v) const { return X == v.X && Y == v.Y; }
 };
-template<> struct TStructOpsTypeTraits<FJmIntVector2D> : public TStructOpsTypeTraitsBase2<FJmIntVector2D>
+template<> struct TStructOpsTypeTraits<FJmjIntVector2D> : public TStructOpsTypeTraitsBase2<FJmjIntVector2D>
 {
 	enum
 	{
@@ -31,7 +31,7 @@ template<> struct TStructOpsTypeTraits<FJmIntVector2D> : public TStructOpsTypeTr
 		WithIdenticalViaEquality = true
 	};
 };
-inline uint32 GetTypeHash(const FJmIntVector2D& v) { return GetTypeHash(MakeTuple(v.X, v.Y)); }
+inline uint32 GetTypeHash(const FJmjIntVector2D& v) { return GetTypeHash(MakeTuple(v.X, v.Y)); }
 
 USTRUCT(BlueprintType)
 struct JMARKOVJUNIOR_API FJmjCellType
@@ -168,7 +168,7 @@ public:
 	virtual void Tick(float deltaSeconds) override;
 	///////
 
-	////  IPC calls (must be on the Game Thread for now)
+	////  Basic IPC calls (must be on the Game Thread for now)
 	
 	//Tries to parse a new MarkovJunior algorithm instance.
 	//If it fails, then false is returned and an error message will be provided.
@@ -219,12 +219,14 @@ public:
 	
 	//////////////////////////////
 	
+	////  Higher-level IPC calls (must be on the Game Thread for now)
+
 	//Reads the current state of a 2D algorithm's grid.
 	//Fills your array with the grid bytes and returns its resolution.
 	//
 	//Note that the innermost axis on the grid is X.
 	UFUNCTION(BlueprintCallable, Category="JMarkovJunior")
-	FJmIntVector2D DownloadGrid2D(FJmjAlgoState state, TArray<uint8>& outValues);
+	FJmjIntVector2D DownloadGrid2D(FJmjAlgoState state, TArray<uint8>& outValues);
 	//Reads the current state of a 3D algorithm's grid.
 	//Fills your array with the grid bytes and returns its resolution.
 	//
@@ -232,6 +234,70 @@ public:
 	UFUNCTION(BlueprintCallable, Category="JMarkovJunior")
 	FIntVector DownloadGrid3D(FJmjAlgoState state, TArray<uint8>& outValues);
 
+	//Immediately parses an algorithm, generates a 2D grid, downloads that grid, and cleans up the objects.
+	//Returns false if parsing failed and there is no result.
+	//
+	//Great for demo purposes or generating small levels.
+	//Awful if you want to run a parsed algorithm multiple times.
+	//
+	//The output array is cleared before appending the grid data to it.
+	//The output resolution will match the input unless you used Operations that resize the grid.
+	UFUNCTION(BlueprintCallable, Category="JMarkovJunior")
+	bool Generate2D(const FString& algoSrc, const FJmjIntVector2D& resolution,
+					const TArray<int>& seeds,
+					FString& parsingErrorMsg,
+					TArray<uint8>& output, FJmjIntVector2D& outputResolution)
+	{
+		FJmjParsedAlgo algo;
+		if (!ParseAlgorithm(algoSrc, parsingErrorMsg, algo))
+			return false;
+		
+		FJmjAlgoState state;
+		verify(StartAlgorithm(algo, { resolution.X, resolution.Y }, seeds, 0, state));
+
+		FinishAlgorithm(state);
+		TArray<int> outputRes;
+		output.Empty();
+		DownloadGrid(state, outputRes, output);
+		outputResolution = { outputRes[0], outputRes[1] };
+
+		DestroyAlgoState(state);
+		DestroyAlgorithm(algo);
+		return true;
+	}
+	//Immediately parses an algorithm, generates a 3D grid, downloads that grid, and cleans up the objects.
+	//Returns false if parsing failed and there is no result.
+	//
+	//Great for demo purposes or generating small levels.
+	//Awful if you want to run a parsed algorithm multiple times.
+	//
+	//The output array is cleared before appending the grid data to it.
+	//The output resolution will match the input unless you used Operations that resize the grid.
+	UFUNCTION(BlueprintCallable, Category="JMarkovJunior")
+	bool Generate3D(const FString& algoSrc, const FIntVector& resolution,
+					const TArray<int>& seeds,
+					FString& parsingErrorMsg,
+					TArray<uint8>& output, FIntVector& outputResolution)
+	{
+		FJmjParsedAlgo algo;
+		if (!ParseAlgorithm(algoSrc, parsingErrorMsg, algo))
+			return false;
+		
+		FJmjAlgoState state;
+		verify(StartAlgorithm(algo, { resolution.X, resolution.Y, resolution.Z }, seeds, 0, state));
+
+		FinishAlgorithm(state);
+		TArray<int> outputRes;
+		output.Empty();
+		DownloadGrid(state, outputRes, output);
+		outputResolution = { outputRes[0], outputRes[1], outputRes[2] };
+
+		DestroyAlgoState(state);
+		DestroyAlgorithm(algo);
+		return true;
+	}
+
+	//////////////////////////////
 
 private:
 
@@ -275,11 +341,18 @@ private:
 	//Pipe helpers:
 
 	template<typename T>
-	void NPWrite(const T& value, int count = 1)
+	void NPWrite(const T& value)
 	{
 		if (DebugFlushStderr)
 			FlushStderr();
-		verify(namedPipe->WriteBytes(sizeof(T) * count, &value));
+		verify(namedPipe->WriteBytes(sizeof(T), &value));
+	}
+	template<typename T>
+	void NPWrite(const T* value, int count)
+	{
+		if (DebugFlushStderr)
+			FlushStderr();
+		verify(namedPipe->WriteBytes(sizeof(T) * count, value));
 	}
 
 	template<typename T>

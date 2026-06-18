@@ -389,17 +389,20 @@ bool UJmjProcessManager::StartAlgorithm(FJmjParsedAlgo algo,
 	NPWrite(static_cast<uint32>(resolutionPerAxis.Num()));
 	for (int r : resolutionPerAxis)
 		NPWrite(static_cast<uint32>(r));
-	NPWrite(static_cast<uint32>(rngSeed.Num()));
+	NPWrite(static_cast<uint32>(rngSeed.Num() * sizeof(int)));
 	for (int s : rngSeed)
-		NPWrite(static_cast<uint32>(s));
+		NPWrite(static_cast<unsigned int>(s));
 
 	bool success = NPRead<uint8>() == 1;
 	if (success)
 	{
-		outState.ID = static_cast<int>(NPRead<uint32_t>());
+		outState = {
+			static_cast<int>(NPRead<uint32_t>()),
+			algo.ID,
+			resolutionPerAxis.Num()
+		};
 		algoStateInfos.Add(outState.ID, AlgoStateInfo{
-			outState.ID, algo.ID,
-			resolutionPerAxis.Num(),
+			outState,
 			autoTicksPerSecond, 1.0f / autoTicksPerSecond,
 			true
 		});
@@ -543,7 +546,7 @@ void UJmjProcessManager::DownloadGrid(FJmjAlgoState state,
 		UE_LOG(LogJMarkovJunior, Verbose, TEXT("DownloadGrid(#%i) succeeded"), state.ID);
 	}
 }
-FJmIntVector2D UJmjProcessManager::DownloadGrid2D(FJmjAlgoState state, TArray<uint8>& outValues)
+FJmjIntVector2D UJmjProcessManager::DownloadGrid2D(FJmjAlgoState state, TArray<uint8>& outValues)
 {
 	TArray<int> resolution;
 	DownloadGrid(state, resolution, outValues);
@@ -574,7 +577,7 @@ void UJmjProcessManager::InitialIPCHandshake()
 	static std::string clientName = "UnrealDefaultPlugin";
 	
 	NPWrite(static_cast<uint32>(clientName.size()));
-	NPWrite(*clientName.data(), clientName.size());
+	NPWrite(clientName.data(), clientName.size());
 }
 void UJmjProcessManager::FlushStderr()
 {

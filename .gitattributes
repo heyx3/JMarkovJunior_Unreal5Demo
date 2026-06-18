@@ -1,3 +1,4 @@
+Plugins/JMarkovJunior/ThirdParty/ filter=lfs diff=lfs merge=lfs -text
 *.gitignore filter=lfs diff=lfs merge=lfs -text
 /LICENSE filter=lfs diff=lfs merge=lfs -text
 *.md filter=lfs diff=lfs merge=lfs -text
@@ -489,5 +490,9 @@
 /Plugins/JMarkovJunior/ThirdParty/JMJ/share/julia/artifacts/fcc05863e77d0e700007d714ef7304c87b39d10e/share/licenses/Pixman/COPYING filter=lfs diff=lfs merge=lfs -text
 /Plugins/JMarkovJunior/ThirdParty/JMJ/share/julia/artifacts/fe57556e552f6469def45abc379ad77f6249d7ef/share/licenses/libzip/LICENSE filter=lfs diff=lfs merge=lfs -text
 *.pem filter=lfs diff=lfs merge=lfs -text
+*.exe filter=lfs diff=lfs merge=lfs -text
+*.dll filter=lfs diff=lfs merge=lfs -text
+*.a filter=lfs diff=lfs merge=lfs -text
+*.LIB filter=lfs diff=lfs merge=lfs -text
 * !text !filter !merge !diff
 Plugins/JMarkovJunior/ThirdParty/** filter=lfs diff=lfs merge=lfs -text

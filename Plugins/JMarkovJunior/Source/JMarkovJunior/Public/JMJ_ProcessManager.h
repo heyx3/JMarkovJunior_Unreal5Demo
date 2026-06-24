@@ -1,81 +1,14 @@
 ﻿#pragma once
 
 #include "CoreMinimal.h"
+#include "GenericPlatform/GenericPlatformNamedPipe.h"
 #include <span>
 
 #include "JMarkovJunior.h"
-#include "GenericPlatform/GenericPlatformNamedPipe.h"
+#include "JMJ_Constants.h"
 
 #include "JMJ_ProcessManager.generated.h"
 
-
-USTRUCT(BlueprintType)
-struct FJmjIntVector2D
-{
-	GENERATED_BODY()
-public:
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	int X = 0;
-	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	int Y = 0;
-
-	bool operator==(const FJmjIntVector2D& v) const { return X == v.X && Y == v.Y; }
-};
-template<> struct TStructOpsTypeTraits<FJmjIntVector2D> : public TStructOpsTypeTraitsBase2<FJmjIntVector2D>
-{
-	enum
-	{
-		WithZeroConstructor = true,
-		WithNoDestructor = true,
-		WithIdenticalViaEquality = true
-	};
-};
-inline uint32 GetTypeHash(const FJmjIntVector2D& v) { return GetTypeHash(MakeTuple(v.X, v.Y)); }
-
-USTRUCT(BlueprintType)
-struct JMARKOVJUNIOR_API FJmjCellType
-{
-	GENERATED_BODY()
-public:
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	FLinearColor Color = FLinearColor::Transparent;
-
-	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	FString Char;
-	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	FString Name;
-};
-
-UCLASS(BlueprintType)
-class JMARKOVJUNIOR_API UJmjConstants : public UBlueprintFunctionLibrary
-{
-	GENERATED_BODY()
-public:
-
-	//All possible kinds of cells, ordered by their value.
-	static std::span<FJmjCellType> GetCellTypes();
-	// (implementation note: the JMJ grid is deliberately 0-based even though Julia is 1-based,
-	//    so these lookups work as expected!)
-
-	//A simple maze-generator algorithm that works in any number of dimensions.
-	static const FString& GetBasicMaze();
-
-protected:
-	UFUNCTION(BlueprintCallable, BlueprintPure)
-	static void GetCellTypes(TArray<FJmjCellType>& output)
-	{
-		output.Empty();
-		auto cellTypes = GetCellTypes();
-		output.Append(cellTypes.data(), cellTypes.size());
-	}
-	UFUNCTION(BlueprintCallable, BlueprintPure)
-	static void GetBasicMaze(FString& algoString)
-	{
-		algoString = GetBasicMaze();
-	}
-};
 
 //A parsed MarkovJunior algorithm, which may be running any number of instances.
 //Create a new one by calling 'ParseAlgorithm' on the engine subsystem 'UJmjProcessManager'.

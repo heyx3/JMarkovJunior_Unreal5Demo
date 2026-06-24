@@ -2,36 +2,12 @@
 
 #include "Interfaces/IPluginManager.h"
 #include "HAL/PlatformProcess.h"
-
 #include "Windows/WindowsPlatformNamedPipe.h"
 
-#include "jmj_consts.hpp"
 #include "jmj_ipc.hpp"
 
 
-std::span<FJmjCellType> UJmjConstants::GetCellTypes()
-{
-	static auto lookup = []() {
-		std::array<FJmjCellType, jmj::NGridValues> output;
-		for (size_t i = 0; i < jmj::NGridValues; i++)
-		{
-			TCHAR charStr[] = { CharCast<TCHAR>(jmj::GridChars[i]), static_cast<TCHAR>(0) };
-			output[i] = {
-				{ jmj::GridColors[i][0], jmj::GridColors[i][1], jmj::GridColors[i][2] },
-				charStr,
-				StringCast<TCHAR>(jmj::GridNames[i].data()).Get()
-			};
-		}
-		return output;
-	}();
-	return std::span{ lookup };
-}
-const FString& UJmjConstants::GetBasicMaze()
-{
-	static FString maze = StringCast<TCHAR>(jmj::BasicMaze.data()).Get();
-	return maze;
-}
-
+struct JmjPlatformKillJob;
 #if PLATFORM_WINDOWS
 	#include "Windows/AllowWindowsPlatformTypes.h"
 	struct JmjPlatformKillJob
@@ -183,6 +159,7 @@ void UJmjProcessManager::PollProcess()
 			FlushStderr();
 		
 			//Look for the "ready for clients" signal.
+			pipeInnerBuffer.Empty();
 			FPlatformProcess::ReadPipeToArray(stdoutFromHere, pipeInnerBuffer);
 			//  (note: the above function returns whether any new bytes were read in)
 			stdoutBuffer.Append(pipeInnerBuffer);
@@ -223,6 +200,7 @@ void UJmjProcessManager::PollProcess()
 			if (!isManagingProcess)
 				break;
 			//Look for the "no more clients" signal.
+			pipeInnerBuffer.Empty();
 			FPlatformProcess::ReadPipeToArray(stdoutFromHere, pipeInnerBuffer);
 			stdoutBuffer.Append(pipeInnerBuffer);
 			if (stdoutBuffer.Num() >= 4)
@@ -330,13 +308,6 @@ bool UJmjProcessManager::DestroyAlgorithm(FJmjParsedAlgo& algo)
 		UE_LOG(LogJMarkovJunior, Error,
 		       TEXT("DestroyAlgorithm(): We aren't currently connected to the JMJ process, "
 				      "so no operations can be performed"));
-		return false;
-	}
-
-	if (!algo.ID == 0)
-	{
-		UE_LOG(LogJMarkovJunior, Error,
-			   TEXT("DestroyAlgorithm(): input was null, so it can't be destroyed!"));
 		return false;
 	}
 
@@ -586,6 +557,7 @@ void UJmjProcessManager::FlushStderr()
 		
 	//Drain the pipe.
 	int firstNewByte = stderrBuffer.Num();
+	pipeInnerBuffer.Empty();
 	FPlatformProcess::ReadPipeToArray(stderrFromHere, pipeInnerBuffer);
 	stderrBuffer.Append(pipeInnerBuffer);
 	int nNewBytes = stderrBuffer.Num() - firstNewByte;

@@ -35,11 +35,6 @@ struct JmjPlatformKillJob;
 #endif
 
 
-UJmjProcessManager* UJmjProcessManager::GetJMJSubsystem()
-{
-	return GEngine->GetEngineSubsystem<UJmjProcessManager>();
-}
-
 void UJmjProcessManager::Initialize(FSubsystemCollectionBase& collection)
 {
 	//Note: the apparent point of `collection` is to allow us
@@ -122,14 +117,14 @@ void UJmjProcessManager::Tick(float deltaSeconds)
 	{
 		if (stateInfo.TicksPerSecond <= 0)
 			continue;
-		
-		int nTicks = FMath::FloorToInt(stateInfo.TimeTillNextTick * stateInfo.TicksPerSecond);
+
+		//Update timing and count how many ticks will happen this frame.
+		stateInfo.TimeTillNextTick -= deltaSeconds;
+		int nTicks = FMath::FloorToInt(-stateInfo.TimeTillNextTick * stateInfo.TicksPerSecond);
 		if (nTicks < 1)
 			continue;
-		
-		stateInfo.TimeTillNextTick = FMath::Max(0.0f,
-			stateInfo.TimeTillNextTick - (nTicks / stateInfo.TicksPerSecond)
-		);
+		stateInfo.TimeTillNextTick += nTicks / stateInfo.TicksPerSecond;
+
 		stateInfo.StillRunning = !StepAlgorithm({ stateID, stateInfo.AlgoID }, nTicks);
 	}
 }
@@ -505,7 +500,7 @@ void UJmjProcessManager::DownloadGrid(FJmjAlgoState state,
 		int nDims = NPRead<uint32_t>();
 		check(nDims == algoStateInfos[state.ID].NDims);
 
-		outResolution.SetNumUninitialized(nDims);
+		outResolution.SetNumUninitialized(nDims, EAllowShrinking::No);
 		for (int& r : outResolution)
 			r = static_cast<int>(NPRead<uint32_t>());
 

@@ -62,10 +62,6 @@ class JMARKOVJUNIOR_API UJmjProcessManager : public UEngineSubsystem, public FTi
 	GENERATED_BODY()
 public:
 
-	UFUNCTION(BlueprintCallable, BlueprintPure)
-	static UJmjProcessManager* GetJMJSubsystem();
-	
-
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, meta=(Keywords="time duration"))
 	float ProcessPollIntervalSeconds = 3.0f;
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, meta=(Keywords="time left"))

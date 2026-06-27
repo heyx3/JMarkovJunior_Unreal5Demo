@@ -59,6 +59,10 @@ public:
 	// (implementation note: the JMJ grid is deliberately 0-based even though Julia is 1-based,
 	//    so these lookups work as expected!)
 
+	//Finds a cell's value based on its char or full name.
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	static uint8 GetCellValueByID(const FString& id);
+	
 	//Finds a cell's full name based on its identifying char.
 	UFUNCTION(BlueprintCallable, BlueprintPure)
 	static FString GetCellName(const FString& cellChar);

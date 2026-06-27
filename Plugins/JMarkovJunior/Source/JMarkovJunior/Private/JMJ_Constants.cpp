@@ -55,6 +55,31 @@ FLinearColor UJmjConstants::GetCellColor(uint8 value)
 	return { 0, 0, 0, 0 };
 }
 
+uint8 UJmjConstants::GetCellValueByID(const FString& id)
+{
+	static auto lookup = []()
+	{
+		TMap<FString, uint8> output;
+		auto inputs = GetCellTypes();
+		
+		for (uint8 i = 0; i < inputs.size(); ++i)
+		{
+			output.Add(inputs[i].Char, i);
+			output.Add(inputs[i].Name, i);
+			output.Add(inputs[i].Name.ToLower(), i);
+		}
+
+		return output;
+	}();
+
+	auto* found = lookup.Find(id);
+	if (found)
+		return *found;
+
+	UE_LOG(LogJMarkovJunior, Error, TEXT("Cell type not found with the ID '%s'! Returning 0 (black)"), *id);
+	return 0;
+}
+
 FString UJmjConstants::GetCellName(const FString& cellChar)
 {
 	static auto lookup = []() {
@@ -140,7 +165,7 @@ FString UJmjConstants::FormatCellGrid(const TArray<uint8>& grid, const TArray<in
 		sliceSizes[i] = sliceSizes[i - 1] * resolution[i - 1];
 	
 	TStringBuilder<1024> sb;
-	sb.Append(TEXT("[\n"));
+	sb.Append(TEXT("[\n    "));
 
 	TArray<int> idx;
 	idx.SetNumZeroed(resolution.Num());

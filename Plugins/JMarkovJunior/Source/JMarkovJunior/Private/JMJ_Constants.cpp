@@ -5,6 +5,11 @@
 #include "Algo/AnyOf.h"
 
 
+//Infuriatingly, FString is case-insensitive for equality and hashing.
+template<typename TVal>
+using TMapCaseSensitiveStringTo = TMap<FString, TVal, FDefaultSetAllocator, FLocKeyMapFuncs<TVal>>;
+
+
 std::span<const FJmjCellType> UJmjConstants::GetCellTypes()
 {
 	static auto lookup = []() {
@@ -26,7 +31,7 @@ std::span<const FJmjCellType> UJmjConstants::GetCellTypes()
 FLinearColor UJmjConstants::GetCellColor(const FString& id)
 {
 	static auto lookup = []() {
-		TMap<FString, FLinearColor> output;
+		TMapCaseSensitiveStringTo<FLinearColor> output;
 		for (const auto& type : GetCellTypes())
 		{
 			output.Add(type.Char, type.Color);
@@ -59,7 +64,7 @@ uint8 UJmjConstants::GetCellValueByID(const FString& id)
 {
 	static auto lookup = []()
 	{
-		TMap<FString, uint8> output;
+		TMapCaseSensitiveStringTo<uint8> output;
 		auto inputs = GetCellTypes();
 		
 		for (uint8 i = 0; i < inputs.size(); ++i)
@@ -83,7 +88,7 @@ uint8 UJmjConstants::GetCellValueByID(const FString& id)
 FString UJmjConstants::GetCellName(const FString& cellChar)
 {
 	static auto lookup = []() {
-		TMap<FString, FString> output;
+		TMapCaseSensitiveStringTo<FString> output;
 		for (const auto& type : GetCellTypes())
 			output.Add(type.Char, type.Name);
 		return output;
@@ -100,7 +105,7 @@ FString UJmjConstants::GetCellName(const FString& cellChar)
 TCHAR UJmjConstants::GetCellChar(const FString& cellName)
 {
 	static auto lookup = []() {
-		TMap<FString, TCHAR> output;
+		TMapCaseSensitiveStringTo<TCHAR> output;
 		for (const auto& type : GetCellTypes())
 			output.Add(type.Name, type.Char[0]);
 		return output;

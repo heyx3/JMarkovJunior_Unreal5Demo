@@ -123,7 +123,27 @@ public:
 						const TArray<int>& resolutionPerAxis,
 						const TArray<int>& rngSeed,
 						float autoTicksPerSecond,
-						FJmjAlgoState& outState);
+						FJmjAlgoState& outState)
+	{
+		return StartAlgorithmImpl(algo, resolutionPerAxis, rngSeed, autoTicksPerSecond, nullptr, outState);
+	}
+	//Starts running the given algorithm with the given initial state.
+	//If your arguments are valid, returns true and outputs the new running algorithm state.
+	//Otherwise returns false.
+	//
+	//You can provide as many RNG seeds as you want, or nothing at all to produce a nondeterministic run.
+	//
+	//Remember to destroy this instance once you're done using it!
+	UFUNCTION(BlueprintCallable, Category="JMarkovJunior")
+	bool StartAlgorithmFromState(FJmjParsedAlgo algo,
+				 				 const TArray<int>& resolutionPerAxis,
+								 const TArray<int>& rngSeed,
+								 float autoTicksPerSecond,
+								 const TArray<uint8>& initialState,
+								 FJmjAlgoState& outState)
+	{
+		return StartAlgorithmImpl(algo, resolutionPerAxis, rngSeed, autoTicksPerSecond, &initialState, outState);
+	}
 	//Deallocates the given running algorithm state.
 	//You can't download its grid after calling this!
 	UFUNCTION(BlueprintCallable, Category="JMarkovJunior")
@@ -260,8 +280,13 @@ private:
 	};
 	ProcState procState = ProcState::Uninitialized;
 
-	//TODO: queue of things to do after Ready
-
+	bool StartAlgorithmImpl(FJmjParsedAlgo algo,
+							const TArray<int>& resolutionPerAxis,
+							const TArray<int>& rngSeed,
+							float autoTicksPerSecond,
+							const TArray<uint8>* initialState,
+							FJmjAlgoState& outState);
+	
 	void PollProcess();
 	void CleanUpProcessHandles();
 	void InitialIPCHandshake();

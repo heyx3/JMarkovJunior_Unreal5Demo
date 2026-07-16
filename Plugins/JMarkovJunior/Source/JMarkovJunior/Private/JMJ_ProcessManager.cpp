@@ -322,11 +322,12 @@ bool UJmjProcessManager::DestroyAlgorithm(FJmjParsedAlgo& algo)
 	return success;
 }
 
-bool UJmjProcessManager::StartAlgorithm(FJmjParsedAlgo algo,
-										const TArray<int>& resolutionPerAxis,
-										const TArray<int>& rngSeed,
-										float autoTicksPerSecond,
-										FJmjAlgoState& outState)
+bool UJmjProcessManager::StartAlgorithmImpl(FJmjParsedAlgo algo,
+											const TArray<int>& resolutionPerAxis,
+											const TArray<int>& rngSeed,
+											float autoTicksPerSecond,
+											const TArray<uint8>* initialState,
+											FJmjAlgoState& outState)
 {
 	check(IsInGameThread());
 	if (!IsOurClientConnected())
@@ -355,6 +356,16 @@ bool UJmjProcessManager::StartAlgorithm(FJmjParsedAlgo algo,
 	NPWrite(static_cast<uint32>(resolutionPerAxis.Num()));
 	for (int r : resolutionPerAxis)
 		NPWrite(static_cast<uint32>(r));
+	if (NPRead<uint8_t>() != 1)
+	{
+		UE_LOG(LogJMarkovJunior, Error, TEXT("StartAlgorithm() failed due to grid resolution (too large maybe?)"));
+		return false;
+	}
+
+	NPWrite(static_cast<uint8>(initialState != nullptr));
+	if (initialState)
+		NPWrite(initialState->GetData(), initialState->Num());
+	
 	NPWrite(static_cast<uint32>(rngSeed.Num() * sizeof(int)));
 	for (int s : rngSeed)
 		NPWrite(static_cast<unsigned int>(s));

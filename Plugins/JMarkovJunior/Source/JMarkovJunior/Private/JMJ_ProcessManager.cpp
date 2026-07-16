@@ -102,6 +102,19 @@ void UJmjProcessManager::Deinitialize()
 	Super::Deinitialize();
 }
 
+bool UJmjProcessManager::WaitForProcess()
+{
+	bool onGameThread = IsInGameThread();
+	while (procState < ProcState::Ready)
+	{
+		FPlatformProcess::Sleep(0.2);
+		if (onGameThread)
+			PollProcess();
+	}
+
+	return IsOurClientConnected();
+}
+
 void UJmjProcessManager::Tick(float deltaSeconds)
 {
 	//Poll the IPC service's process.

@@ -74,6 +74,11 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& collection) override;
 	virtual void Deinitialize() override;
 
+	//Halts the calling (usually Game) thread until the process connection is actually made.
+	//Usually a very light call in practice, so always call this before doing some level generation with JMJ.
+	//Returns false if the process is unexpectedly dead and no generation can be done (not likely).
+	UFUNCTION(BlueprintCallable)
+	bool WaitForProcess();
 	
 	UFUNCTION(BlueprintCallable, BlueprintPure)
 	bool IsProcessInitialized() const { return procState > ProcState::Uninitialized; }

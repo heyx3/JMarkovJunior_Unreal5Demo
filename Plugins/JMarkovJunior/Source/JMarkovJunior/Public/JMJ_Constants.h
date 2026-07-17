@@ -20,6 +20,8 @@ public:
 	int Y = 0;
 
 	bool operator==(const FJmjIntVector2D& v) const { return X == v.X && Y == v.Y; }
+
+	FVector2D ToVf() const { return { static_cast<double>(X), static_cast<double>(Y) }; }
 };
 template<> struct TStructOpsTypeTraits<FJmjIntVector2D> : public TStructOpsTypeTraitsBase2<FJmjIntVector2D>
 {

@@ -3,7 +3,53 @@
 #include "JMJ_ProcessManager.h"
 
 
-UJmjGrid2D* UJmjGrid2D::CreateFromAlgorithmState(const struct FJmjAlgoState& state,
+UJmjGrid2D* UJmjGrid2D::CreateFromAlgorithm(const FJmjParsedAlgo& algo,
+										    const FJmjIntVector2D& resolution,
+										    const FIntVector& seeds,
+											UObject* owner, FName objName, bool isTransient)
+{
+	auto* processManager = (GEngine ? GEngine->GetEngineSubsystem<UJmjProcessManager>() : nullptr);
+	if (processManager == nullptr || !processManager->IsOurClientConnected())
+	{
+		UE_LOG(LogJMarkovJunior, Error,
+			   TEXT("UJmjGrid2D::CreateFromAlgorithm(): "
+					 "We aren't connected to the JMJ process (or the subsystem doesn't exist)! "
+					 "Nothing changes"));
+		return nullptr;
+	}
+
+	auto* grid = NewObject<UJmjGrid2D>(owner, objName, isTransient ? RF_Transient : RF_NoFlags);
+	
+	FJmjAlgoState algoState;
+	grid->resolutionBuffer.Empty(); grid->resolutionBuffer.Add(resolution.X); grid->resolutionBuffer.Add(resolution.Y);
+	if (!processManager->StartAlgorithm(algo, grid->resolutionBuffer, { seeds.X, seeds.Y, seeds.Z }, 0, algoState))
+	{
+		UE_LOG(LogJMarkovJunior, Error,
+			   TEXT("UJmjGrid2D::CreateFromAlgorithm(): "
+						 "New algorithm run rejected! Is the algorithm handle invalid or the grid too large?"));
+		return nullptr;
+	}
+	processManager->FinishAlgorithm(algoState);
+
+	processManager->DownloadGrid(algoState, grid->resolutionBuffer, grid->Bytes);
+	processManager->DestroyAlgoState(algoState);
+
+	if (grid->resolutionBuffer.Num() != 2)
+	{
+		UE_LOG(LogJMarkovJunior, Warning,
+			   TEXT("UJmjGrid2D::CreateFromAlgorithm(): "
+						 "2D grid became %iD after running! It can't be stored properly in a UJmjGrid2D. "
+						 "The extra dimensions will be flattened onto the second axis."),
+			   grid->resolutionBuffer.Num());
+		while (grid->resolutionBuffer.Num() > 2)
+			grid->resolutionBuffer[1] *= grid->resolutionBuffer.Pop();
+	}
+	grid->Resolution = { grid->resolutionBuffer[0], grid->resolutionBuffer[1] };
+	check(grid->Resolution.X * grid->Resolution.Y == grid->Bytes.Num());
+	
+	return grid;
+}
+UJmjGrid2D* UJmjGrid2D::CreateFromAlgorithmState(const FJmjAlgoState& state,
 												 UObject* owner, FName objName, bool isTransient)
 {
 	auto* grid = NewObject<UJmjGrid2D>(owner, objName, isTransient ? RF_Transient : RF_NoFlags);
@@ -64,20 +110,66 @@ void UJmjGrid2D::DownloadFromAlgorithm(const FJmjAlgoState& state)
 	if (processManager == nullptr || !processManager->IsOurClientConnected())
 	{
 		UE_LOG(LogJMarkovJunior, Error,
-			   TEXT("We aren't connected to the JMJ process (or the subsystem doesn't exist)! "
+			   TEXT("UJmjGrid2D::DownloadFromAlgorithm(): "
+			   		 "We aren't connected to the JMJ process (or the subsystem doesn't exist)! "
 				     "Nothing is downloaded"));
 		return;
 	}
 
-	processManager->DownloadGrid(state, resolutionBuffer, Bytes);
 	if (resolutionBuffer.Num() != 2)
 	{
-		UE_LOG(LogJMarkovJunior, Error,
-			   TEXT("Tried to download a 2D grid state but it was %iD!"),
+		UE_LOG(LogJMarkovJunior, Warning,
+			   TEXT("UJmjGrid2D::DownloadFromAlgorithm(): "
+						 "2D grid became %iD after running! It can't be stored properly in a UJmjGrid2D. "
+						 "The extra dimensions will be flattened onto the second axis."),
 			   resolutionBuffer.Num());
-		return;
+		while (resolutionBuffer.Num() > 2)
+			resolutionBuffer[1] *= resolutionBuffer.Pop();
 	}
 	Resolution = { resolutionBuffer[0], resolutionBuffer[1] };
+	check(Resolution.X * Resolution.Y == Bytes.Num());
+}
+bool UJmjGrid2D::SeedAndDownloadAlgorithmRun(const FJmjParsedAlgo& algo, const FIntVector& seeds)
+{
+	auto* processManager = (GEngine ? GEngine->GetEngineSubsystem<UJmjProcessManager>() : nullptr);
+	if (processManager == nullptr || !processManager->IsOurClientConnected())
+	{
+		UE_LOG(LogJMarkovJunior, Error,
+			   TEXT("UJmjGrid2D::SeedAndDownloadAlgorithmRun(): "
+				     "We aren't connected to the JMJ process (or the subsystem doesn't exist)! "
+					 "Nothing changes"));
+		return false;
+	}
+
+	FJmjAlgoState algoState;
+	resolutionBuffer.Empty(); resolutionBuffer.Add(Resolution.X); resolutionBuffer.Add(Resolution.Y);
+	if (!processManager->StartAlgorithmFromState(algo, resolutionBuffer, { seeds.X, seeds.Y, seeds.Z },
+		                                         0, Bytes, algoState))
+	{
+		UE_LOG(LogJMarkovJunior, Error,
+			   TEXT("UJmjGrid2D::SeedAndDownloadAlgorithmRun(): "
+			   		  "New algorithm run rejected! Is the algorithm handle invalid or the grid too large?"));
+		return false;
+	}
+	processManager->FinishAlgorithm(algoState);
+
+	processManager->DownloadGrid(algoState, resolutionBuffer, Bytes);
+	processManager->DestroyAlgoState(algoState);
+
+	if (resolutionBuffer.Num() != 2)
+	{
+		UE_LOG(LogJMarkovJunior, Warning,
+			   TEXT("UJmjGrid2D::SeedAndDownloadAlgorithmRun(): "
+			   		  "2D grid became %iD after running! It can't be stored properly in a UJmjGrid2D. "
+			   		  "The extra dimensions will be flattened onto the second axis."),
+			   resolutionBuffer.Num());
+		while (resolutionBuffer.Num() > 2)
+			resolutionBuffer[1] *= resolutionBuffer.Pop();
+	}
+	Resolution = { resolutionBuffer[0], resolutionBuffer[1] };
+	check(Resolution.X * Resolution.Y == Bytes.Num());
+
+	return true;
 }
 
 

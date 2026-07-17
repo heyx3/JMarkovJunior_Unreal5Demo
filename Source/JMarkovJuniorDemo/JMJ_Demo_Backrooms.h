@@ -6,40 +6,56 @@
 
 
 /*
-  This infinite level generator splits the world into square 2D cells,
-    pre-selects 1-N connecting pixels between each cell based on the level seed,
-    then uses MarkovJunior to fill in each cell based on that boundary info.
+  This infinite level generator splits the world into square 2D cells and runs MarkovJunior within each one.
+  Each cell's MJ run is seeded with only its index + level seed, so they are deterministic and order-independent.
+  To ensure neighboring cells connect nicely, the border pixels are pre-generated and fed to MJ,
+    using randomness seeded by the edge ID + level seed.
 
-  Each connecting pixel between two cells is given a "seal".
-  When a seal is "unsealed", it triggers more level generation nearby to keep the infinite world going.
+  Each connecting pixel out from a new cell is given a "seal" actor, which triggers further level generation when "unsealed".
   Seals can take any form you want, for example:
-    * An interactive door which is unsealed when opened for the first time
-    * An invisible wall which is unsealed (and destroyed) when entering a player's line-of-sight.
+    * An interactive door which is unsealed when opened for the first time.
+    * An invisible trigger volume which is unsealed when players walk through it.
 
   Replication is respected, so that this level generator can be networked!
-  However we don't support late-joining players, as they would need to be manually sent
-    any static-mesh instances which have been already loaded.
-  Totally doable but I'm not bothering for a demo.
+  However we don't take the extra effort to support late-joining players --
+    we'd have to manually send the transform data for all existing static-mesh instances.
 */
+
+
+/*
+  To build your own game from this system, follow these steps:
+    1. Build a child of ABackroomsSeal, to trigger further level generation at certain points (e.g. when players walk through it).
+    2. Build a child of ABackroomsCell, to set up floor/ceiling/wall meshes. 
+    3. Inherit from or configure UBackrooms_GM_Component, within a Game Mode, to use your own prefabs and parameters.
+    4. Generation will immediately start on that Game-Mode component's BeginPlay.
+    5. After BeginPlay you can call "GetRandomEmptyPos({ 0, 0 })" to find some initial spawn locations.
+    6. If you wish, destroy the generated level early by destroying the GM component.
+*/
+
 
 class ABackroomsSeal;
 class ABackroomsCell;
 
 UDELEGATE()
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBackroomsUnsealing, ABackroomsSeal*, seal);
+UDELEGATE()
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnBackroomsCellGenerated,
+											   const FJmjIntVector2D&, cellIdx,
+											   ABackroomsCell*, cell,
+											   const TArray<ABackroomsSeal*>&, seals);
 
 
 //Sets up the backrooms level generation logic.
 //
 // 1. Inherit from this and provide prefabs, other data.
-// 2. Create within a Game Mode to immediately start the generator.
-// 3. Call "GetRandomEmptyPos({ 0, 0, 0 })" to find initial spawn locations and teleport your player there.
+// 2. Attach to a Game Mode and generation immediately starts on BeginPlay.
+// 3. Call "GetRandomEmptyPos({ 0, 0 })" to find initial spawn locations and teleport your players there.
 // 4. Make sure there is some way to unseal your ABackroomsSeal's.
 // 5. Destroy the generated level's actors by destroying this component.
 //
 //Note that the very first generated cell of the first game you play will take a few seconds to finish;
 //  after that they should run near-instantaneous.
-UCLASS(BlueprintType, Blueprintable)
+UCLASS(BlueprintType, Blueprintable, meta=(BlueprintSpawnableComponent))
 class UBackrooms_GM_Component : public UActorComponent
 {
 	GENERATED_BODY()
@@ -57,7 +73,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly, Category="Setup|Size")
 	float PixelHeight = 300;
 	//The number of pixels along each generated cell.
-	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly, Category="Setup|Params")
+	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly, Category="Setup|Params", meta=(ClampMin=4))
 	int CellResolution = 32;
 	//The min number of connections along each edge connecting two cells.
 	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly, Category="Setup|Params", meta=(ClampMin=1))
@@ -67,7 +83,7 @@ public:
 	int MaxEdgeConnections = 6;
 	//Set to a value other than 0 for a deterministic game.
 	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly, Category="Setup|Params")
-	int64 InitialSeed = 0;
+	int Seed = 0;
 	//The actor that renders meshes of a single cell.
 	//The mesh is expected to be sized like a pixel of the generated world, with the origin at its min-corner.
 	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly, Category="Setup|Prefabs")
@@ -76,25 +92,18 @@ public:
 	//It must be sized like a pixel of the generated world, with the origin at its min-corner.
 	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly, Category="Setup|Prefabs")
 	TSubclassOf<ABackroomsSeal> SealPrefab;
-	//A floor that spans a whole cell in size, and whose origin is on the min-top corner.
-	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly, Category="Setup|Prefabs")
-	TSubclassOf<AActor> FloorPrefab;
-	//A ceiling that spans a whole cell in size, and whose origin is on the min corner.
-	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly, Category="Setup|Prefabs")
-	TSubclassOf<AActor> CeilingPrefab;
 
-	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Category="State")
+	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient, Category="State")
 	TArray<ABackroomsSeal*> Seals;
-	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Category="State")
-	TArray<AActor*> Floors;
-	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Category="State")
-	TArray<AActor*> Ceilings;
-	//(Z component is unused and always set to 0)
-	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Category="State")
+	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient, Category="State")
 	TMap<FJmjIntVector2D, ABackroomsCell*> ActiveCells;
-	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Category="State")
+	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient, Category="State")
 	FJmjParsedAlgo JmjAlgo;
 
+	//Triggers once for each new cell that's generated.
+	UPROPERTY(BlueprintAssignable)
+	FOnBackroomsCellGenerated OnNewCellGenerated;
+	
 	
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type reason) override;
@@ -107,18 +116,25 @@ public:
 	//Fails (returns false) if that cell hasn't been generated.
 	UFUNCTION(BlueprintCallable, BlueprintPure)
 	bool GetRandomEmptyPos(const FJmjIntVector2D& cell, FJmjIntVector2D& outLocalPixel, FVector& outWorldFloorPos) const;
+	//Gets the floor position of the given pixel, either at its center or its min.
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	FVector PixelIdxToWorldFloorPos(const FJmjIntVector2D& pixel, bool atMinCorner) const;
 	
 	//Immediately loads the given cell if it hasn't been already.
 	//Returns false if it already existed (true if it really was just generated).
 	//
 	//Normally this is called internally as seals are unsealed.
 	UFUNCTION(BlueprintCallable)
-	bool LoadCell(const FJmjIntVector2D& idx);
+	bool LoadCell(const FJmjIntVector2D& cellIdx);
 
 private:
 
 	UFUNCTION(BlueprintCallable)
 	void OnSealBroken(ABackroomsSeal* seal);
+
+	TSet<int> bufferIntegerSet;
+	TMap<FJmjIntVector2D, FJmjIntVector2D> bufferIdx2DMap;
+	TArray<ABackroomsSeal*> bufferNewSeals;
 };
 
 //A physical block between two cells of the Backrooms level generator.
@@ -131,9 +147,9 @@ class ABackroomsSeal : public AActor
 public:
 
 	//The index of the neighboring cell that will become unsealed.
-	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly)
+	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient, Replicated)
 	FJmjIntVector2D TargetCell;
-	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly)
+	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient)
 	bool IsStillSealed = true;
 
 	//Raised on all machines (server and clients) when the unsealing happens.
@@ -150,14 +166,11 @@ public:
 	
 	ABackroomsSeal();
 	void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-	
-	virtual void BeginPlay() override;
 
 private:
 
 	UFUNCTION(NetMulticast, Reliable)
 	void TriggerUnsealingRPC();
-	void TriggerUnsealingLocalLogic();
 };
 
 //A single square area that is filled in using a MarkovJunior algorithm.
@@ -167,15 +180,37 @@ class ABackroomsCell : public AActor
 	GENERATED_BODY()
 public:
 
-	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly)
+	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient)
 	class UJmjGrid2D* GeneratedGrid = nullptr;
-	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly)
+	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient)
 	FJmjIntVector2D Idx;
+	UPROPERTY(BlueprintReadOnly, Transient)
+	TArray<FVector3f> ServerInstanceLocations;
 
+	//The mesh is expected to be sized to cover the entire cell, with its top at Z=0.
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Replicated)
+	UStaticMeshComponent* FloorMesh;
+	//The mesh is expected to be sized to cover the entire cell, with its bottom at the top of the cell space.
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Replicated)
+	UStaticMeshComponent* CeilingMesh;
 	//The mesh is expected to be sized like a pixel of the generated world, with the origin at its min-corner.
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Replicated)
 	UInstancedStaticMeshComponent* WallMeshes;
 
 	ABackroomsCell();
 	void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	void SendMeshInstancesToClients();
+
+protected:
+
+	UFUNCTION(NetMulticast, Reliable)
+	void ReceiveMeshInstances(const TArray<FVector3f>& locations);
+	
+	void ActuallyApplyMeshInstances(const TArray<FVector3f>& locations);
+
+private:
+
+	TArray<FVector3f> rpcBuffer;
+	TArray<FTransform> transformBuffer;
 };

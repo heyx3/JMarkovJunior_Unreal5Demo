@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 
+#include <type_traits>
+
 #include "JMJ_Constants.h"
 #include "JMJ_ProcessManager.h"
 
@@ -15,6 +17,16 @@ class JMARKOVJUNIOR_API UJmjGrid2D : public UObject
 	GENERATED_BODY()
 public:
 
+	//Insta-runs the given algorithm and downloads it as a new 2D grid instance.
+	//Returns null if something went wrong (not connected to the JMJ process, invalid grid size, etc.)
+	UFUNCTION(BlueprintCallable, DisplayName="JMJ Grid 2D from current algo state")
+	static UJmjGrid2D* CreateFromAlgorithm(const struct FJmjParsedAlgo& algo,
+										   const FJmjIntVector2D& resolution,
+										   const FIntVector& seeds,
+										   UObject* owner = nullptr,
+										   FName objName = NAME_None,
+										   bool isTransient = true);
+	
 	UFUNCTION(BlueprintCallable, DisplayName="JMJ Grid 2D from current algo state")
 	static UJmjGrid2D* CreateFromAlgorithmState(const struct FJmjAlgoState& state,
 												UObject* owner = nullptr,
@@ -45,10 +57,24 @@ public:
 	
 	UFUNCTION(BlueprintCallable, BlueprintPure)
 	int CountPixelsOfColor(const FString& colorID) const;
-
+	
 	//Updates this grid object to hold the current state of the given running algorithm.
+	//
+	//If the output dimensionality is different then the input, logs a warning
+	//    and flattens the extra dimensions onto the Y axis.
 	UFUNCTION(BlueprintCallable)
 	void DownloadFromAlgorithm(const struct FJmjAlgoState& state);
+	//Seeds a new algorithm run with this grid's contents, insta-finishes it, then loads the output back into this grid.
+	//Returns false if something went wrong.
+	//
+	//Note that this could change this object's resolution! Depending on what your algorithm does.
+	//
+	//If the output dimensionality is different then the input, logs a warning
+	//    and flattens the extra dimensions onto the Y axis.
+	UFUNCTION(BlueprintCallable)
+	bool SeedAndDownloadAlgorithmRun(const FJmjParsedAlgo& algo,
+									 const FIntVector& seeds);
+	
 	//Sets up this object with a new grid, whose contents are uninitialized.
 	//Ideally you will fill the values in using 'ForEach'.
 	void InitializeWithResolution(const FJmjIntVector2D& resolution)

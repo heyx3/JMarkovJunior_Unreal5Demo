@@ -89,19 +89,16 @@ namespace BackroomsJmjAlgo
 			@rewrite [MS][LEw] => _[MMS]
 		end
 		# Finalize the walls and spaces.
-		@rewrite [Mw]=>E
+		@rewrite [MS]=>E
 		@rewrite b=>I
 
 		# Now place lights.
-		#TODO: Test
-		#=
 		@rewrite 1 E=>Y
 		@sequence begin
-			@rewrite area/20 E=>L
-			@rewrite area/40 E=>Y
+			@rewrite area/40 E=>L
+			@rewrite area/120 E=>Y
 		end field(LY->E)
 		@rewrite L=>E
-		=#
 	end)JMJ";
 }
 
@@ -213,14 +210,16 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 	
 	//Seed the level generator.
 	auto* jmjGrid = NewObject<UJmjGrid2D>(spawnParams.Owner);
+	jmjGrid->InitializeWithResolution({ CellResolution, CellResolution });
 	//Most of the grid is indeterminate, but each edge needs to be fixed so cells know how to line up.
-	int maxPossibleEntryways = (CellResolution - 2) / 2; //Every other edge pixel excluding corners
+	int maxPossibleEntryways = (CellResolution - 2) / 3; //Every other edge pixel excluding corners
 	int nMinEntryways = FMath::Clamp(MinEdgeConnections, 1, maxPossibleEntryways),
 		nMaxEntryways = FMath::Clamp(MaxEdgeConnections, nMinEntryways, maxPossibleEntryways);
 	auto cellValueWall = UJmjConstants::GetCellValueByID(BackroomsJmjAlgo::CharWall),
 	     cellValueEmpty = UJmjConstants::GetCellValueByID(BackroomsJmjAlgo::CharEmpty),
 		 cellValueForcedWall = UJmjConstants::GetCellValueByID(BackroomsJmjAlgo::CharForcedWall),
-		 cellValueForcedEmpty = UJmjConstants::GetCellValueByID(BackroomsJmjAlgo::CharForcedEmpty);
+		 cellValueForcedEmpty = UJmjConstants::GetCellValueByID(BackroomsJmjAlgo::CharForcedEmpty),
+		 cellValueLight = UJmjConstants::GetCellValueByID(BackroomsJmjAlgo::CharLight);
 	//First fill the grid with indeterminate values.
 	jmjGrid->ForEach([&](const auto& vIdx, uint8& value) { value = cellValueWall; });
 	//Next, fill each edge with forced values.
@@ -254,7 +253,7 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 			//   come out to the same value for both cells on either side.
 			//We standardize on using the index of the cell after the edge.
 			auto seedSrc = cellIdx;
-			if (isMinSide)
+			if (!isMinSide)
 				(isVertical ? seedSrc.X : seedSrc.Y) += 1;
 			int seed = GetTypeHash(MakeTuple(seedSrc.X, seedSrc.Y, Seed, isVertical));
 			FRandomStream rng{ seed };
@@ -288,6 +287,8 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 			}
 		}
 	}
+	UE_LOG(LogJMarkovJunior, Log, TEXT("Initial state of cell {%i, %i}: %s"),
+		   cellIdx.X, cellIdx.Y, *UJmjConstants::FormatCellGrid(jmjGrid->GetBytes(), { jmjGrid->GetResolution().X, jmjGrid->GetResolution().Y }));
 	
 	//Generate the cell contents.
 	if (!jmjGrid->SeedAndDownloadAlgorithmRun(JmjAlgo, { cellIdx.X, cellIdx.Y, Seed }))
@@ -303,9 +304,14 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 				else
 					gridByte = cellValueWall;
 			else
-				gridByte = cellValueWall;
+				if (((gridIdx.X + gridIdx.Y) % 3) == 0)
+					gridByte = cellValueLight;
+				else
+					gridByte = cellValueEmpty;
 		});
 	}
+	UE_LOG(LogJMarkovJunior, Log, TEXT("Final state of cell {%i, %i}: %s"),
+		   cellIdx.X, cellIdx.Y, *UJmjConstants::FormatCellGrid(jmjGrid->GetBytes(), { jmjGrid->GetResolution().X, jmjGrid->GetResolution().Y }));
 
 	//Spawn the cell actor.
 	FTransform cellTr{
@@ -325,25 +331,49 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 		cell->AttachToComponent(Origin, FAttachmentTransformRules::KeepRelativeTransform);
 
 	//Spawn the cell pieces.
-	auto cellPieceTr = [&](const FJmjIntVector2D& localPixel) -> FTransform
-	{
-		return FTransform{ FVector{ localPixel.X * PixelLength, localPixel.Y * PixelLength, 0 } };
-	};
 	jmjGrid->ForEach([&](const auto& localPixel, auto gridValue)
 	{
 		if (gridValue == cellValueWall || gridValue == cellValueForcedWall)
 		{
 			cell->ServerInstanceLocations.Emplace(localPixel.X * PixelLength, localPixel.Y * PixelLength, 0);
 		}
+		else if (gridValue == cellValueLight && IsValid(CeilingLightPrefab))
+		{
+			UE_LOG(LogJMarkovJunior, Log, TEXT("Light at local={%i, %i}"), localPixel.X, localPixel.Y);
+
+			//Rotate the light if we're in a hallway going along X.
+			float rotDegrees = 0;
+			if (localPixel.Y > 0 && localPixel.Y < CellResolution-1 &&
+				jmjGrid->ByteAt({ localPixel.X, localPixel.Y - 1 }) == cellValueWall &&
+				jmjGrid->ByteAt({ localPixel.X, localPixel.Y + 1 }) == cellValueWall)
+			{
+				rotDegrees = 90;
+			}
+			
+			auto lightTr = UKismetMathLibrary::ComposeTransforms(
+				FTransform{
+					FRotator{ 0, rotDegrees, 0 },
+					FVector{
+						(localPixel.X + 0.5f) * PixelLength,
+						(localPixel.Y + 0.5f) * PixelLength,
+						PixelHeight - 4.0f
+					}
+				},
+				cellTr
+			);
+			CeilingLights.Add(world->SpawnActor<AActor>(CeilingLightPrefab, lightTr, spawnParams));
+		}
 	});
-	cell->SendMeshInstancesToClients();
+	cell->FinalizeWallMeshInstances();
+	ActiveCells.Add(cellIdx, cell); 
 	
 	//Spawn seals at the connections.
 	check(bufferNewSeals.IsEmpty()); //Should be kept empty to avoid stale pointers
 	for (const auto& [localPixel, triggeringCellIdx] : bufferIdx2DMap)
 	{
+		UE_LOG(LogJMarkovJunior, Log, TEXT("Seal at {%i, %i} of {%i, %i}"), localPixel.X, localPixel.Y, cellIdx.X, cellIdx.Y);
 		auto sealTr = UKismetMathLibrary::ComposeTransforms(
-			cellPieceTr(localPixel),
+			FTransform{ FVector{ localPixel.X * PixelLength, localPixel.Y * PixelLength, 0 } },
 			cellTr
 		);
 		auto* seal = world->SpawnActorDeferred<ABackroomsSeal>(
@@ -355,13 +385,14 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 		
 		seal->FinishSpawning(sealTr, true);
 		if (IsValid(Origin))
-			cell->AttachToComponent(Origin, FAttachmentTransformRules::KeepRelativeTransform);
+			seal->AttachToComponent(Origin, FAttachmentTransformRules::KeepRelativeTransform);
 
 		seal->OnUnsealed.AddDynamic(this, &UBackrooms_GM_Component::OnSealBroken);
 		bufferNewSeals.Add(seal);
 	}
-
+	
 	OnNewCellGenerated.Broadcast(cellIdx, cell, { bufferNewSeals });
+	bufferNewSeals.Empty();
 	return true;
 }
 void UBackrooms_GM_Component::OnSealBroken(ABackroomsSeal* seal)
@@ -416,7 +447,7 @@ void ABackroomsCell::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 }
 
-void ABackroomsCell::SendMeshInstancesToClients()
+void ABackroomsCell::FinalizeWallMeshInstances()
 {
 	check(HasAuthority());
 

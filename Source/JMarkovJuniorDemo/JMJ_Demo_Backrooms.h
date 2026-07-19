@@ -88,17 +88,24 @@ public:
 	//The mesh is expected to be sized like a pixel of the generated world, with the origin at its min-corner.
 	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly, Category="Setup|Prefabs")
 	TSubclassOf<ABackroomsCell> CellPrefab;
+	//The actor for a single ceiling light.
+	//The mesh is expected to fit inside one pixel of the generator grid,
+	//  with the origin at the center-bottom, facing longways along the Y axis.
+	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly, Category="Setup|Prefabs")
+	TSubclassOf<AActor> CeilingLightPrefab;
 	//The specific kind of seal to use between cells.
 	//It must be sized like a pixel of the generated world, with the origin at its min-corner.
 	UPROPERTY(BlueprintReadWrite, EditDefaultsOnly, Category="Setup|Prefabs")
 	TSubclassOf<ABackroomsSeal> SealPrefab;
 
 	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient, Category="State")
-	TArray<ABackroomsSeal*> Seals;
-	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient, Category="State")
-	TMap<FJmjIntVector2D, ABackroomsCell*> ActiveCells;
-	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient, Category="State")
 	FJmjParsedAlgo JmjAlgo;
+	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient, Category="State|Actors")
+	TArray<ABackroomsSeal*> Seals;
+	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient, Category="State|Actors")
+	TMap<FJmjIntVector2D, ABackroomsCell*> ActiveCells;
+	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient, Category="State|Actors")
+	TArray<AActor*> CeilingLights;
 
 	//Triggers once for each new cell that's generated.
 	UPROPERTY(BlueprintAssignable)
@@ -200,7 +207,7 @@ public:
 	ABackroomsCell();
 	void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	void SendMeshInstancesToClients();
+	void FinalizeWallMeshInstances();
 
 protected:
 

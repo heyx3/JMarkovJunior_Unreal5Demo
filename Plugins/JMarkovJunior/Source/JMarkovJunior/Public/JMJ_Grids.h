@@ -95,8 +95,8 @@ public:
 		constexpr bool ReturnsBool = std::is_same_v<bool, std::invoke_result_t<Func, FJmjIntVector2D, uint8&>>;
 
 		int i = 0;
-		for (int x = 0; x < Resolution.X; x++)
-			for (int y = 0; y < Resolution.Y; y++)
+		for (int y = 0; y < Resolution.Y; y++)
+			for (int x = 0; x < Resolution.X; x++)
 			{
 				FJmjIntVector2D pixel{ x, y };
 				if constexpr (ReturnsBool)
@@ -126,8 +126,8 @@ public:
 		constexpr bool ReturnsBool = std::is_same_v<bool, std::invoke_result_t<Func, FJmjIntVector2D, uint8>>;
 
 		int i = 0;
-		for (int x = 0; x < Resolution.X; x++)
-			for (int y = 0; y < Resolution.Y; y++)
+		for (int y = 0; y < Resolution.Y; y++)
+			for (int x = 0; x < Resolution.X; x++)
 			{
 				FJmjIntVector2D pixel{ x, y };
 				if constexpr (ReturnsBool)
@@ -222,9 +222,9 @@ public:
 		constexpr bool ReturnsBool = std::is_same_v<bool, std::invoke_result_t<Func, FIntVector, uint8&>>;
 
 		int i = 0;
-		for (int x = 0; x < Resolution.X; x++)
+		for (int z = 0; z < Resolution.Z; ++z)
 			for (int y = 0; y < Resolution.Y; y++)
-				for (int z = 0; z < Resolution.Z; ++z)
+				for (int x = 0; x < Resolution.X; x++)
 				{
 					FIntVector pixel{ x, y, z };
 					if constexpr (ReturnsBool)
@@ -254,9 +254,9 @@ public:
 		constexpr bool ReturnsBool = std::is_same_v<bool, std::invoke_result_t<Func, FIntVector, uint8>>;
 
 		int i = 0;
-		for (int x = 0; x < Resolution.X; x++)
+		for (int z = 0; z < Resolution.Z; ++z)
 			for (int y = 0; y < Resolution.Y; y++)
-				for (int z = 0; z < Resolution.Z; ++z)
+				for (int x = 0; x < Resolution.X; x++)
 				{
 					FIntVector pixel{ x, y, z };
 					if constexpr (ReturnsBool)

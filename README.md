@@ -7,7 +7,7 @@ See that repo for more information, but in a nutshell, MarkovJunior is an algori
 The integration plugin runs MarkovJunior.jl as a standalone exe,
   using that project's [IPC protocol](https://github.com/heyx3/MarkovJunior.jl#through-the-ipc).
 
-> *Currently we only support Windows, but I welcome PR's to add other platforms!*
+> *Currently we only support Windows. More platforms may come after the integration stabilizes.*
 
 ## Integration Plugin
 

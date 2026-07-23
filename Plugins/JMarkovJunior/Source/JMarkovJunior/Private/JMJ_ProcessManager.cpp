@@ -302,6 +302,7 @@ bool UJmjProcessManager::ParseAlgorithm(const FString& sourceCode,
 		errMsgBuffer.SetNumUninitialized(errMsgSize);
 		NPRead(std::span{ errMsgBuffer.GetData(), errMsgSize });
 
+		FlushStderr();
 		outErrMsg = { errMsgBuffer.GetData() };
 		UE_LOG(LogJMarkovJunior, Error, TEXT("Failed to parse algorithm: %s"), *outErrMsg);
 	}
@@ -330,6 +331,7 @@ bool UJmjProcessManager::DestroyAlgorithm(FJmjParsedAlgo& algo)
 	}
 	else
 	{
+		FlushStderr();
 		UE_LOG(LogJMarkovJunior, Error, TEXT("DestroyAlgorithm(): #%i doesn't exist!"), algo.ID);
 	}
 	return success;
@@ -371,6 +373,7 @@ bool UJmjProcessManager::StartAlgorithmImpl(FJmjParsedAlgo algo,
 		NPWrite(static_cast<uint32>(r));
 	if (NPRead<uint8_t>() != 1)
 	{
+		FlushStderr();
 		UE_LOG(LogJMarkovJunior, Error, TEXT("StartAlgorithm() failed due to grid resolution (too large maybe?)"));
 		return false;
 	}
@@ -400,6 +403,7 @@ bool UJmjProcessManager::StartAlgorithmImpl(FJmjParsedAlgo algo,
 	}
 	else
 	{
+		FlushStderr();
 		UE_LOG(LogJMarkovJunior, Error, TEXT("StartAlgorithm() failed!"));
 		return false;
 	}
@@ -428,6 +432,7 @@ void UJmjProcessManager::DestroyAlgoState(FJmjAlgoState& state)
 	}
 	else
 	{
+		FlushStderr();
 		UE_LOG(LogJMarkovJunior, Error, TEXT("DestroyAloState(#%i) failed!"), state.ID);
 	}
 }
@@ -456,6 +461,7 @@ bool UJmjProcessManager::StepAlgorithm(FJmjAlgoState state, int count)
 	}
 	else
 	{
+		FlushStderr();
 		UE_LOG(LogJMarkovJunior, Error, TEXT("StepAlgorithm(#%i) failed!"), state.ID);
 		return true;
 	}
@@ -482,6 +488,7 @@ void UJmjProcessManager::FinishAlgorithm(FJmjAlgoState state)
 	}
 	else
 	{
+		FlushStderr();
 		UE_LOG(LogJMarkovJunior, Error, TEXT("FinishAlgorithm(#%i) failed!"), state.ID);
 	}
 }
@@ -500,6 +507,7 @@ bool UJmjProcessManager::CheckAlgorithmFinished(FJmjAlgoState state)
 	const auto* info = algoStateInfos.Find(state.ID);
 	if (!info)
 	{
+		FlushStderr();
 		UE_LOG(LogJMarkovJunior, Error, TEXT("FinishAlgorithm(#%i) failed!"), state.ID);
 		return true;
 	}

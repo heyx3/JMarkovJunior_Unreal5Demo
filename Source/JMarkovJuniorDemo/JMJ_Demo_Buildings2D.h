@@ -5,9 +5,13 @@
 #include "JMJ_Demo_Buildings2D.generated.h"
 
 
+UDELEGATE()
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBuilding2DDoneGenerating,
+											class AJmjBuilding2D*, building);
+
 //Represents a specific kind of MarkovJunior-generated 2D building.
 UCLASS(BlueprintType, Blueprintable)
-class AJmjBuilding2DSchema : public AInfo
+class JMARKOVJUNIORDEMO_API AJmjBuilding2DSchema : public AInfo
 {
 	GENERATED_BODY()
 public:
@@ -33,12 +37,26 @@ protected:
 	FJmjParsedAlgo algorithmHandle;
 };
 
+
+//Handles the editor visualization of an AJmjBuilding2D.
+UCLASS(BlueprintType)
+class JMARKOVJUNIORDEMO_API UJmjBuilding2DEditorViz : public UActorComponent
+{
+	GENERATED_BODY()
+public:
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	FColor BoundsColor = FColor::Yellow;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, meta=(ClampMin=0))
+	float LineThickness = 0.0f;
+};
+
 //Runs a 2D MarkovJunior algorithm to generate a building profile,
 //    then extrapolates it into a 3D voxel scene.
 //
 //The building keeps its origin at the bottom-center of the voxel scene, and its unscaled bounds at {1, 1, height/width}.
 UCLASS(BlueprintType, Blueprintable)
-class AJmjBuilding2D : public AActor
+class JMARKOVJUNIORDEMO_API AJmjBuilding2D : public AActor
 {
 	GENERATED_BODY()
 public:
@@ -53,7 +71,7 @@ public:
 	UInstancedStaticMeshComponent* VoxelsWindowLights;
 
 	//What kind of building to generate.
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, meta=(ExposeOnSpawn))
 	AJmjBuilding2DSchema* BuildingSchema = nullptr;
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
 	int BuildingResolutionHorizontal = 8;
@@ -67,6 +85,8 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient)
 	bool IsFinishedGenerating = false;
+	UPROPERTY(BlueprintAssignable)
+	FOnBuilding2DDoneGenerating OnDoneGenerating;
 
 	AJmjBuilding2D();
 	virtual void BeginPlay() override;
@@ -77,6 +97,8 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient)
 	FJmjAlgoState AlgorithmState;
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
+	UJmjBuilding2DEditorViz* EditorViz;
 
 private:
 

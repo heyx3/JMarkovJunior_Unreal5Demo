@@ -8,6 +8,11 @@
 			"Name": "JMarkovJuniorDemo",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "JMarkovJuniorDemo_Editor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
 		}
 	],
 	"Plugins": [

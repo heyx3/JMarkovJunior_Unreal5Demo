@@ -35,6 +35,9 @@ AJmjBuilding2D::AJmjBuilding2D()
 	PrimaryActorTick.bCanEverTick = true;
 	
 	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root Component"));
+	
+	EditorViz = CreateDefaultSubobject<UJmjBuilding2DEditorViz>(TEXT("Editor Bounds Viz"));
+	
 
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> engineCubeFinder(TEXT("StaticMesh'/Engine/BasicShapes/Cube.Cube'"));
 	auto* engineCube = engineCubeFinder.Object.Get();
@@ -106,9 +109,9 @@ void AJmjBuilding2D::MeshVoxels(const TArray<uint8>& bytes, const FIntPoint& res
 	FVector sceneOffset{
 		-FVector2D{
 			static_cast<double>(resolution.X),
-			static_cast<double>(resolution.Y)
+			static_cast<double>(resolution.X)
 		} / 2,
-		0.5
+		0.0
 	};
 	auto getVoxelTr = [&](FIntVector3 areaMin, FIntVector3 areaMax) -> FTransform
 	{
@@ -169,4 +172,6 @@ void AJmjBuilding2D::MeshVoxels(const TArray<uint8>& bytes, const FIntPoint& res
 	VoxelsMetalDetails->AddInstances(trMetalDetails, false);
 	VoxelsSignalLights->AddInstances(trSignalLights, false);
 	VoxelsWindowLights->AddInstances(trWindowLights, false);
+
+	OnDoneGenerating.Broadcast(this);
 }

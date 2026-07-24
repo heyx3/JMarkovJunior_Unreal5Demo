@@ -128,7 +128,7 @@ void UJmjProcessManager::Tick(float deltaSeconds)
 	//Issue tick commands.
 	for (auto& [stateID, stateInfo] : algoStateInfos)
 	{
-		if (stateInfo.TicksPerSecond <= 0)
+		if (stateInfo.TicksPerSecond <= 0 || !stateInfo.StillRunning)
 			continue;
 
 		//Update timing and count how many ticks will happen this frame.
@@ -348,7 +348,7 @@ bool UJmjProcessManager::StartAlgorithmImpl(FJmjParsedAlgo algo,
 	if (!IsOurClientConnected())
 	{
 		UE_LOG(LogJMarkovJunior, Error,
-			   TEXT("DestroyAlgorithm(): We aren't currently connected to the JMJ process, "
+			   TEXT("StartAlgorithm(): We aren't currently connected to the JMJ process, "
 					  "so no operations can be performed"));
 		return false;
 	}
@@ -414,7 +414,7 @@ void UJmjProcessManager::DestroyAlgoState(FJmjAlgoState& state)
 	if (!IsOurClientConnected())
 	{
 		UE_LOG(LogJMarkovJunior, Error,
-			   TEXT("DestroyAlgorithm(): We aren't currently connected to the JMJ process, "
+			   TEXT("DestroyAlgoState(): We aren't currently connected to the JMJ process, "
 					  "so no operations can be performed"));
 		return;
 	}
@@ -443,7 +443,7 @@ bool UJmjProcessManager::StepAlgorithm(FJmjAlgoState state, int count)
 	if (!IsOurClientConnected())
 	{
 		UE_LOG(LogJMarkovJunior, Error,
-			   TEXT("DestroyAlgorithm(): We aren't currently connected to the JMJ process, "
+			   TEXT("StepAlgorithm(): We aren't currently connected to the JMJ process, "
 					  "so no operations can be performed"));
 		return false;
 	}
@@ -457,6 +457,7 @@ bool UJmjProcessManager::StepAlgorithm(FJmjAlgoState state, int count)
 	if (success)
 	{
 		bool isFinished = NPRead<uint8>() != 0;
+		algoStateInfos[state.ID].StillRunning = !isFinished;
 		return isFinished;
 	}
 	else
@@ -472,7 +473,7 @@ void UJmjProcessManager::FinishAlgorithm(FJmjAlgoState state)
 	if (!IsOurClientConnected())
 	{
 		UE_LOG(LogJMarkovJunior, Error,
-			   TEXT("DestroyAlgorithm(): We aren't currently connected to the JMJ process, "
+			   TEXT("FinishAlgorithm(): We aren't currently connected to the JMJ process, "
 					  "so no operations can be performed"));
 		return;
 	}
@@ -498,7 +499,7 @@ bool UJmjProcessManager::CheckAlgorithmFinished(FJmjAlgoState state)
 	if (!IsOurClientConnected())
 	{
 		UE_LOG(LogJMarkovJunior, Error,
-			   TEXT("DestroyAlgorithm(): We aren't currently connected to the JMJ process, "
+			   TEXT("CheckAlgorithmFinished(): We aren't currently connected to the JMJ process, "
 					  "so no operations can be performed"));
 		return false;
 	}
@@ -541,7 +542,8 @@ void UJmjProcessManager::DownloadGrid(FJmjAlgoState state,
 	}
 	else
 	{
-		UE_LOG(LogJMarkovJunior, Verbose, TEXT("DownloadGrid(#%i) succeeded"), state.ID);
+		FlushStderr();
+		UE_LOG(LogJMarkovJunior, Error, TEXT("DownloadGrid(#%i) failed"), state.ID);
 	}
 }
 FJmjIntVector2D UJmjProcessManager::DownloadGrid2D(FJmjAlgoState state, TArray<uint8>& outValues)

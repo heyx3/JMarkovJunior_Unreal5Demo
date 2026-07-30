@@ -1,12 +1,13 @@
 ﻿#include "JMJ_Grids.h"
 
+#include "UObject/UObjectGlobals.h"
 #include "JMJ_ProcessManager.h"
 
 
 UJmjGrid2D* UJmjGrid2D::CreateFromAlgorithm(const FJmjParsedAlgo& algo,
-										    const FJmjIntVector2D& resolution,
-										    const FIntVector& seeds,
-											UObject* owner, FName objName, bool isTransient)
+                                            const FJmjIntVector2D& resolution,
+                                            const FIntVector& seeds,
+                                            UObject* owner, FName objName, bool isTransient)
 {
 	auto* processManager = (GEngine ? GEngine->GetEngineSubsystem<UJmjProcessManager>() : nullptr);
 	if (processManager == nullptr || !processManager->IsOurClientConnected())
@@ -52,7 +53,7 @@ UJmjGrid2D* UJmjGrid2D::CreateFromAlgorithm(const FJmjParsedAlgo& algo,
 UJmjGrid2D* UJmjGrid2D::CreateFromAlgorithmState(const FJmjAlgoState& state,
 												 UObject* owner, FName objName, bool isTransient)
 {
-	auto* grid = NewObject<UJmjGrid2D>(owner, objName, isTransient ? RF_Transient : RF_NoFlags);
+	auto* grid = NewObject<UJmjGrid2D>(IsValid(owner) ? owner : GetTransientPackage(), objName, isTransient ? RF_Transient : RF_NoFlags);
 	grid->DownloadFromAlgorithm(state);
 	return grid;
 }
@@ -176,7 +177,7 @@ bool UJmjGrid2D::SeedAndDownloadAlgorithmRun(const FJmjParsedAlgo& algo, const F
 UJmjGrid3D* UJmjGrid3D::CreateFromAlgorithmState(const struct FJmjAlgoState& state,
 												 UObject* owner, FName objName, bool isTransient)
 {
-	auto* grid = NewObject<UJmjGrid3D>(owner, objName, isTransient ? RF_Transient : RF_NoFlags);
+	auto* grid = NewObject<UJmjGrid3D>(IsValid(owner) ? owner : GetTransientPackage(), objName, isTransient ? RF_Transient : RF_NoFlags);
 	grid->DownloadFromAlgorithm(state);
 	return grid;
 }

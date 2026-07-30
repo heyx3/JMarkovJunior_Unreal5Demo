@@ -35,25 +35,26 @@ AJmjBuilding2D::AJmjBuilding2D()
 	PrimaryActorTick.bCanEverTick = true;
 	
 	RootComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root Component"));
+	RootComponent->Mobility = EComponentMobility::Type::Movable;
 	
 	EditorViz = CreateDefaultSubobject<UJmjBuilding2DEditorViz>(TEXT("Editor Bounds Viz"));
 	
-
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> engineCubeFinder(TEXT("StaticMesh'/Engine/BasicShapes/Cube.Cube'"));
 	auto* engineCube = engineCubeFinder.Object.Get();
 	auto setupIsm = [&](UInstancedStaticMeshComponent*& handle, const TCHAR* name)
 	{
 		handle = CreateDefaultSubobject<UInstancedStaticMeshComponent>(name);
 		handle->SetupAttachment(RootComponent);
+		handle->Mobility = EComponentMobility::Type::Movable;
 		handle->SetStaticMesh(engineCube);
 		handle->SetCollisionEnabled(ECollisionEnabled::Type::QueryAndPhysics);
 		handle->SetCollisionObjectType(ECC_WorldStatic);
 		return handle;
 	};
-	setupIsm(VoxelsMetalBody, TEXT("Voxels: Metal Body"));
-	setupIsm(VoxelsMetalDetails, TEXT("Voxels: Metal Details"));
-	setupIsm(VoxelsSignalLights, TEXT("Voxels: Signal Lights"));
-	setupIsm(VoxelsWindowLights, TEXT("Voxels: Window Lights"));
+	setupIsm(VoxelsMetalBody, TEXT("Voxels Metal Body"));
+	setupIsm(VoxelsMetalDetails, TEXT("Voxels Metal Details"));
+	setupIsm(VoxelsSignalLights, TEXT("Voxels Signal Lights"));
+	setupIsm(VoxelsWindowLights, TEXT("Voxels Window Lights"));
 }
 void AJmjBuilding2D::BeginPlay()
 {

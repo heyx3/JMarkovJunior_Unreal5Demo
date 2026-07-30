@@ -3,6 +3,7 @@
 #include "Interfaces/IPluginManager.h"
 #include "HAL/PlatformProcess.h"
 #include "Windows/WindowsPlatformNamedPipe.h"
+#include <string>
 
 #include "jmj_ipc.hpp"
 
@@ -107,7 +108,7 @@ bool UJmjProcessManager::WaitForProcess()
 	bool onGameThread = IsInGameThread();
 	while (procState < ProcState::Ready)
 	{
-		FPlatformProcess::Sleep(0.2);
+		FPlatformProcess::Sleep(0.2f);
 		if (onGameThread)
 			PollProcess();
 	}

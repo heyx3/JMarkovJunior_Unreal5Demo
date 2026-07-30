@@ -22,6 +22,8 @@ public:
 	//0 is null.
 	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly)
 	int ID = 0;
+	
+	bool IsNull() const { return ID == 0; }
 };
 //A specific instance of a running MarkovJunior algorithm on a specific grid.
 //Create a new one by calling 'StartAlgorithm' on the engine subsystem 'UJmjProcessManager'.
@@ -45,6 +47,8 @@ public:
 	//The dimensionality of the grid this state is running on.
 	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly)
 	int NDims = 0;
+
+	bool IsNull() const { return ID == 0; }
 };
 
 //Manages the JMarkovJunior process, which parses and runs algorithms for us.

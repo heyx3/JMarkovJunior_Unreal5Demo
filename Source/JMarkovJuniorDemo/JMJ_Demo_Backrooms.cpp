@@ -1,6 +1,9 @@
 ﻿#include "JMJ_Demo_Backrooms.h"
 
 #include <array>
+#include <cmath>
+#include <numeric>
+
 #include "Algo/AllOf.h"
 #include "Algo/AnyOf.h"
 #include "Kismet/KismetMathLibrary.h"
@@ -167,7 +170,7 @@ bool UBackrooms_GM_Component::GetRandomEmptyPos(const FJmjIntVector2D& cell2D,
 	auto* cell = *tryCell;
 
 	auto emptyCellID = UJmjConstants::GetCellValueByID(BackroomsJmjAlgo::CharEmpty);
-	checkSlow(cell->GeneratedGrid->ForEach([&](const FJmjIntVector2D& idx, uint8 val)
+	checkSlow(cell->GeneratedGrid->ForEach([&](int flatIdx, const FJmjIntVector2D& idx, uint8 val)
 	{
 		return val == emptyCellID;
 	}));
@@ -221,7 +224,7 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 		 cellValueForcedEmpty = UJmjConstants::GetCellValueByID(BackroomsJmjAlgo::CharForcedEmpty),
 		 cellValueLight = UJmjConstants::GetCellValueByID(BackroomsJmjAlgo::CharLight);
 	//First fill the grid with indeterminate values.
-	jmjGrid->ForEach([&](const auto& vIdx, uint8& value) { value = cellValueWall; });
+	jmjGrid->ForEach([&](int flatIdx, const auto& vIdx, uint8& value) { value = cellValueWall; });
 	//Next, fill each edge with forced values.
 	bufferIdx2DMap.Empty(); //Maps local index of an entryway to the index of the neighboring cell
 	for (bool isVertical : std::to_array({ false, true }))
@@ -296,7 +299,7 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 		UE_LOG(LogJMarkovJunior, Error,
 			   TEXT("Failed to generate cell {%i, %i}, so it will be left wide open!"),
 			   cellIdx.X, cellIdx.Y);
-		jmjGrid->ForEach([&](const auto& gridIdx, auto& gridByte)
+		jmjGrid->ForEach([&](int flatIdx, const auto& gridIdx, auto& gridByte)
 		{
 			if (FMath::Min(gridIdx.X, gridIdx.Y) == 0 || FMath::Max(gridIdx.X, gridIdx.Y) == CellResolution-1)
 				if (bufferIdx2DMap.Contains(gridIdx))
@@ -331,7 +334,7 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 		cell->AttachToComponent(Origin, FAttachmentTransformRules::KeepRelativeTransform);
 
 	//Spawn the cell pieces.
-	jmjGrid->ForEach([&](const auto& localPixel, auto gridValue)
+	jmjGrid->ForEach([&](int flatIdx, const auto& localPixel, auto gridValue)
 	{
 		if (gridValue == cellValueWall || gridValue == cellValueForcedWall)
 		{

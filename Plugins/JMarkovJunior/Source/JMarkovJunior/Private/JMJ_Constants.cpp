@@ -10,6 +10,8 @@ template<typename TVal>
 using TMapCaseSensitiveStringTo = TMap<FString, TVal, FDefaultSetAllocator, FLocKeyMapFuncs<TVal>>;
 
 
+static_assert(UJmjConstants::NCellTypes == jmj::NGridValues);
+
 std::span<const FJmjCellType> UJmjConstants::GetCellTypes()
 {
 	static auto lookup = []() {
@@ -82,6 +84,27 @@ uint8 UJmjConstants::GetCellValueByID(const FString& id)
 		return *found;
 
 	UE_LOG(LogJMarkovJunior, Error, TEXT("Cell type not found with the ID '%s'! Returning 0 (black)"), *id);
+	return 0;
+}
+uint8 UJmjConstants::GetCellValueByID(TCHAR id)
+{
+	static auto lookup = []()
+	{
+		TMap<TCHAR, uint8> output;
+		auto inputs = GetCellTypes();
+
+		for (uint8 i = 0; i < inputs.size(); ++i)
+			output.Add(inputs[i].Char[0], i);
+
+		return output;
+	}();
+
+	auto* found = lookup.Find(id);
+	if (found)
+		return *found;
+
+	const TCHAR charStr[] = { id, TEXT('\0') };
+	UE_LOG(LogJMarkovJunior, Error, TEXT("Cell type not found with the char '%s'! Returning 0 (black)"), charStr);
 	return 0;
 }
 

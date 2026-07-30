@@ -56,6 +56,8 @@ class JMARKOVJUNIOR_API UJmjConstants : public UBlueprintFunctionLibrary
 	GENERATED_BODY()
 public:
 
+	static constexpr int NCellTypes = 16; //static_assert in cpp file keeps this correct
+
 	//All possible kinds of cells, ordered by their value.
 	static std::span<const FJmjCellType> GetCellTypes();
 	// (implementation note: the JMJ grid is deliberately 0-based even though Julia is 1-based,
@@ -64,6 +66,8 @@ public:
 	//Finds a cell's value based on its char or full name.
 	UFUNCTION(BlueprintCallable, BlueprintPure)
 	static uint8 GetCellValueByID(const FString& id);
+	//Finds a cell's value based on its char.
+	static uint8 GetCellValueByID(TCHAR id);
 	
 	//Finds a cell's full name based on its identifying char.
 	UFUNCTION(BlueprintCallable, BlueprintPure)
@@ -119,5 +123,138 @@ protected:
 	static void GetBasicMaze(FString& algoString)
 	{
 		algoString = GetBasicMaze();
+	}
+};
+
+//A set of JMarkovJunior cell types.
+//
+//Highly optimized into nothing but a UInt16!
+//And iteration through it happens in a deterministic order.
+USTRUCT(BlueprintType)
+struct FJmjCellSet
+{
+	GENERATED_BODY()
+public:
+
+	uint16 Bits = 0;
+
+	template<typename I>
+	requires std::integral<I> && (!std::same_as<I, char>) && (!std::same_as<I, wchar_t>) && (!std::same_as<I, char16_t>) && (!std::same_as<I, char32_t>)
+	bool Contains(I cellValue) const
+	{
+		return (Bits & static_cast<uint16>(uint16{ 1 } << static_cast<uint16>(cellValue))) != uint16{ 0 };
+	}
+	bool Contains(TCHAR cellChar) const { return Contains(UJmjConstants::GetCellValueByID(cellChar)); }
+	bool Contains(const FString& nameOrChar) const { return Contains(UJmjConstants::GetCellValueByID(nameOrChar)); }
+
+	FJmjCellSet Union(FJmjCellSet s2) const { return { static_cast<uint16>(
+		Bits | s2.Bits
+	) }; }
+	template<typename I>
+	requires std::integral<I> && (!std::same_as<I, char>) && (!std::same_as<I, wchar_t>) && (!std::same_as<I, char16_t>) && (!std::same_as<I, char32_t>)
+	FJmjCellSet Union(I cellValue) const { return Union(FJmjCellSet{ static_cast<uint16>(1 << cellValue) }); }
+	FJmjCellSet Union(TCHAR cellChar) const { return Union(UJmjConstants::GetCellValueByID(cellChar)); }
+	FJmjCellSet Union(const FString& cellNameOrChar) const { return Union(UJmjConstants::GetCellValueByID(cellNameOrChar)); }
+
+	FJmjCellSet Difference(FJmjCellSet s2) const { return { static_cast<uint16>(
+		Bits & static_cast<uint16>(~s2.Bits)
+	) }; }
+	template<typename I>
+	requires std::integral<I> && (!std::same_as<I, char>) && (!std::same_as<I, wchar_t>) && (!std::same_as<I, char16_t>) && (!std::same_as<I, char32_t>)
+	FJmjCellSet Difference(I cellValue) const { return Difference(FJmjCellSet{ static_cast<uint16>(1 << cellValue) }); }
+	FJmjCellSet Difference(TCHAR cellChar) const { return Difference(UJmjConstants::GetCellValueByID(cellChar)); }
+	FJmjCellSet Difference(const FString& cellNameOrChar) const { return Difference(UJmjConstants::GetCellValueByID(cellNameOrChar)); }
+	
+	FJmjCellSet Intersection(FJmjCellSet s2) const { return { static_cast<uint16>(
+		Bits & s2.Bits
+	) }; }
+
+	//Iterates over every value in this set and invokes your lambda on it,
+	//   passing the value by copy.
+	//
+	//To interrupt the loop, have your lambda return true
+	//  (then this function returns whether the interrupt occurred).
+	template<typename ToDo>
+	auto ForEachElement(ToDo&& func) const
+	{
+		constexpr bool ReturnsBool = std::is_same_v<bool, std::invoke_result_t<ToDo, FJmjIntVector2D, uint8&>>;
+
+		for (uint16 i = 0; i < UJmjConstants::NCellTypes; ++i)
+		{
+			if (!Contains(i))
+				return;
+			if constexpr (ReturnsBool)
+			{
+				if (std::invoke(func, i))
+					return true;
+			}
+			else
+			{
+				std::invoke(func, i);
+			}
+		}
+
+		if constexpr (ReturnsBool)
+			return false;
+	}
+
+	bool operator==(FJmjCellSet s2) const { return Bits == s2.Bits; }
+	bool Serialize(FArchive& ar) { ar << Bits; return true; }
+};
+inline FArchive& operator<<(FArchive& ar, FJmjCellSet s) { s.Serialize(ar); return ar; }
+template<>
+struct TStructOpsTypeTraits<FJmjCellSet> : public TStructOpsTypeTraitsBase2<FJmjCellSet>
+{
+	enum
+	{
+		WithZeroConstructor = true,
+		WithNoDestructor = true,
+		WithIdenticalViaEquality = true,
+		WithSerializer = true
+	};
+};
+inline uint32 GetTypeHash(FJmjCellSet s) { return GetTypeHash(s.Bits); }
+UCLASS(BlueprintType)
+class UJmjCellSetFunctions : public UBlueprintFunctionLibrary
+{
+	GENERATED_BODY()
+public:
+
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	static FJmjCellSet NewJmJCellSetFromIDs(const TArray<FString>& ids)
+	{
+		FJmjCellSet set;
+		for (const auto& id : ids)
+			set = set.Union(id);
+		return set;
+	}
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	static FJmjCellSet NewJmjCellSetFromChars(const FString& chars)
+	{
+		FJmjCellSet set;
+		for (TCHAR c : chars)
+			set = set.Union(c);
+		return set;
+	}
+
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	static bool JmjCellSetContains(FJmjCellSet set, uint8 value) { return set.Contains(value); }
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	static bool JmjCellSetContainsByChar(FJmjCellSet set, const FString& charOrID) { return set.Contains(charOrID); }
+
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	static FJmjCellSet UnionJmjCellSet(FJmjCellSet a, FJmjCellSet b)
+	{
+		return a.Union(b);
+	}
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	static FJmjCellSet DifferenceJmjCellSet(FJmjCellSet a, FJmjCellSet b)
+	{
+		return a.Difference(b);
+	}
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	static FJmjCellSet IntersectJmjCellSet(FJmjCellSet a, FJmjCellSet b)
+	{
+		return a.Intersection(b);
 	}
 };

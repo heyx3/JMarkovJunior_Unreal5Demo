@@ -95,7 +95,7 @@ int UJmjGrid2D::CountPixelsOfColor(const FString& colorID) const
 	auto value = UJmjConstants::GetCellValueByID(colorID);
 	
 	int count = 0;
-	ForEach([&count, value](const FJmjIntVector2D& idx, uint8 element)
+	ForEach([&count, value](int flatIdx, const FJmjIntVector2D& idx, uint8 element)
 	{
 		if (element == value)
 			count += 1;
@@ -220,7 +220,7 @@ int UJmjGrid3D::CountPixelsOfColor(const FString& colorID) const
 	auto value = UJmjConstants::GetCellValueByID(colorID);
 	
 	int count = 0;
-	ForEach([&count, value](const FIntVector& idx, uint8 element)
+	ForEach([&count, value](int flatIdx, const FIntVector& idx, uint8 element)
 	{
 		if (element == value)
 			count += 1;

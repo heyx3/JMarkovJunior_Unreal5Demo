@@ -57,6 +57,10 @@ public:
 	
 	UFUNCTION(BlueprintCallable, BlueprintPure)
 	int CountPixelsOfColor(const FString& colorID) const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	int GetFlatIdx(const FJmjIntVector2D& idx2D) const { return idx2D.X + (Resolution.X * idx2D.Y); }
+
 	
 	//Updates this grid object to hold the current state of the given running algorithm.
 	//
@@ -82,17 +86,16 @@ public:
 		Resolution = resolution;
 		Bytes.SetNumUninitialized(Resolution.X * Resolution.Y, EAllowShrinking::No);
 	}
-
 	
 	//Iterates over every value in this grid and invokes your lambda on it,
-	//   passing the index and a reference to the grid element.
+	//   passing (int flatIdx, FJmjIntVector2D idx, uint8& value).
 	//
 	//To interrupt the loop, have your lambda return true
 	//  (then this function returns whether the interrupt occurred).
 	template<typename Func>
 	auto ForEach(Func&& toDo)
 	{
-		constexpr bool ReturnsBool = std::is_same_v<bool, std::invoke_result_t<Func, FJmjIntVector2D, uint8&>>;
+		constexpr bool ReturnsBool = std::is_same_v<bool, std::invoke_result_t<Func, int, FJmjIntVector2D, uint8&>>;
 
 		int i = 0;
 		for (int y = 0; y < Resolution.Y; y++)
@@ -101,12 +104,12 @@ public:
 				FJmjIntVector2D pixel{ x, y };
 				if constexpr (ReturnsBool)
 				{
-					if (std::invoke(toDo, pixel, Bytes[i]))
+					if (std::invoke(toDo, i, pixel, Bytes[i]))
 						return true;
 				}
 				else
 				{
-					std::invoke(toDo, pixel, Bytes[i]);
+					std::invoke(toDo, i, pixel, Bytes[i]);
 				}
 
 				i += 1;
@@ -116,14 +119,14 @@ public:
 			return false;
 	}
 	//Iterates over every value in this grid and invokes your lambda on it,
-	//   passing the index and the grid element.
+	//   passing (int flatIdx, FJmjIntVector2D idx, uint8 value).
 	//
 	//To interrupt the loop, have your lambda return true
 	//  (then this function returns whether the interrupt occurred).
 	template<typename Func>
 	auto ForEach(Func&& toDo) const
 	{
-		constexpr bool ReturnsBool = std::is_same_v<bool, std::invoke_result_t<Func, FJmjIntVector2D, uint8>>;
+		constexpr bool ReturnsBool = std::is_same_v<bool, std::invoke_result_t<Func, int, FJmjIntVector2D, uint8>>;
 
 		int i = 0;
 		for (int y = 0; y < Resolution.Y; y++)
@@ -132,12 +135,12 @@ public:
 				FJmjIntVector2D pixel{ x, y };
 				if constexpr (ReturnsBool)
 				{
-					if (std::invoke(toDo, pixel, Bytes[i]))
+					if (std::invoke(toDo, i, pixel, Bytes[i]))
 						return true;
 				}
 				else
 				{
-					std::invoke(toDo, pixel, Bytes[i]);
+					std::invoke(toDo, i, pixel, Bytes[i]);
 				}
 
 				i += 1;
@@ -210,16 +213,18 @@ public:
 		Bytes.SetNumUninitialized(Resolution.X * Resolution.Y * Resolution.Z, EAllowShrinking::No);
 	}
 
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	int GetFlatIdx(const FIntVector& idx3D) const { return idx3D.X + (Resolution.X * (idx3D.Y + (Resolution.Y * idx3D.Z))); }
 	
 	//Iterates over every value in this grid and invokes your lambda on it,
-	//   passing the index and a reference to the grid element.
+	//   passing (int flatIdx, FIntVector idx, uint8& value).
 	//
 	//To interrupt the loop, have your lambda return true
 	//  (then this function returns whether the interrupt occurred).
 	template<typename Func>
 	auto ForEach(Func&& toDo)
 	{
-		constexpr bool ReturnsBool = std::is_same_v<bool, std::invoke_result_t<Func, FIntVector, uint8&>>;
+		constexpr bool ReturnsBool = std::is_same_v<bool, std::invoke_result_t<Func, int, FIntVector, uint8&>>;
 
 		int i = 0;
 		for (int z = 0; z < Resolution.Z; ++z)
@@ -229,12 +234,12 @@ public:
 					FIntVector pixel{ x, y, z };
 					if constexpr (ReturnsBool)
 					{
-						if (std::invoke(toDo, pixel, Bytes[i]))
+						if (std::invoke(toDo, i, pixel, Bytes[i]))
 							return true;
 					}
 					else
 					{
-						std::invoke(toDo, pixel, Bytes[i]);
+						std::invoke(toDo, i, pixel, Bytes[i]);
 					}
 
 					i += 1;
@@ -244,14 +249,14 @@ public:
 			return false;
 	}
 	//Iterates over every value in this grid and invokes your lambda on it,
-	//   passing the index and the grid element.
+	//   passing (int flatIdx, FIntVector idx, uint8& value).
 	//
 	//To interrupt the loop, have your lambda return true
 	//  (then this function returns whether the interrupt occurred).
 	template<typename Func>
 	auto ForEach(Func&& toDo) const
 	{
-		constexpr bool ReturnsBool = std::is_same_v<bool, std::invoke_result_t<Func, FIntVector, uint8>>;
+		constexpr bool ReturnsBool = std::is_same_v<bool, std::invoke_result_t<Func, int, FIntVector, uint8>>;
 
 		int i = 0;
 		for (int z = 0; z < Resolution.Z; ++z)
@@ -261,12 +266,12 @@ public:
 					FIntVector pixel{ x, y, z };
 					if constexpr (ReturnsBool)
 					{
-						if (std::invoke(toDo, pixel, Bytes[i]))
+						if (std::invoke(toDo, i, pixel, Bytes[i]))
 							return true;
 					}
 					else
 					{
-						std::invoke(toDo, pixel, Bytes[i]);
+						std::invoke(toDo, i, pixel, Bytes[i]);
 					}
 
 					i += 1;

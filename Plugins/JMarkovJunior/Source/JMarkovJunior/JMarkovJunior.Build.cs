@@ -14,8 +14,11 @@ public class JMarkovJunior : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] {
 			"CoreUObject", "Engine",
 			"Slate", "SlateCore",
-			"Projects"
+			"Projects", "DeveloperSettings"
 		});
+		
+		PublicDefinitions.Add("JMJ_MODULE_EXPORT=JMARKOVJUNIOR_API");
+		//The other defines (e.g. checkf for assert) are already handled automatically.
 
         var binariesSrcDir = Path.Combine(PluginDirectory, "ThirdParty");
         var binariesDestDir = "$(PluginDir)/Binaries/ThirdParty/";

@@ -1,7 +1,7 @@
 ﻿#pragma once
 
 #include "CoreMinimal.h"
-#include "JMJ_ProcessManager.h"
+#include "JMJ_ProcessManagement.h"
 #include "JMJ_Demo_Buildings2D.generated.h"
 
 
@@ -28,13 +28,13 @@ public:
 	FString AlgorithmCharWindowLights = TEXT("Y");
 	
 	UFUNCTION(BlueprintCallable, BlueprintPure)
-	FJmjParsedAlgo GetAlgorithmHandle();
+	UMarkovJuniorAlgorithm* GetAlgorithmHandle();
 
 	virtual void BeginDestroy() override;
 
 protected:
 	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient)
-	FJmjParsedAlgo algorithmHandle;
+	UMarkovJuniorAlgorithm* algorithmHandle;
 };
 
 
@@ -96,7 +96,7 @@ public:
 protected:
 
 	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient)
-	FJmjAlgoState AlgorithmState;
+	UMarkovJuniorRunState* AlgorithmState;
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
 	UJmjBuilding2DEditorViz* EditorViz;
 

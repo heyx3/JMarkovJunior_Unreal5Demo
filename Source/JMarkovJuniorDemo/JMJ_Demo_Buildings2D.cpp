@@ -4,27 +4,18 @@
 #include "Kismet/KismetMathLibrary.h"
 
 
-FJmjParsedAlgo AJmjBuilding2DSchema::GetAlgorithmHandle()
+UMarkovJuniorAlgorithm* AJmjBuilding2DSchema::GetAlgorithmHandle()
 {
-	if (algorithmHandle.ID == 0)
-	{
-		auto* jmjProcess = GEngine->GetEngineSubsystem<UJmjProcessManager>();
-		FString errMsg;
-		if (!jmjProcess->ParseAlgorithm(AlgorithmSrc, errMsg, algorithmHandle))
-		{
-			UE_LOG(LogJMarkovJunior, Error, TEXT("Failed to parse algorithm from %s: %s"),
-				   *GetName(), *errMsg);
-		}
-	}
-
+	if (!IsValid(algorithmHandle))
+	    algorithmHandle = UMarkovJuniorAlgorithm::Parse(AlgorithmSrc);
 	return algorithmHandle;
 }
 void AJmjBuilding2DSchema::BeginDestroy()
 {
-	if (algorithmHandle.ID != 0)
+	if (IsValid(algorithmHandle))
 	{
-		auto* jmjProcess = GEngine->GetEngineSubsystem<UJmjProcessManager>();
-		jmjProcess->DestroyAlgorithm(algorithmHandle);
+	    algorithmHandle->CleanUp();
+	    algorithmHandle = nullptr;
 	}
 	
 	Super::BeginDestroy();
@@ -62,21 +53,29 @@ void AJmjBuilding2D::BeginPlay()
 
 	if (IsValid(BuildingSchema))
 	{
-		auto* jmjProcess = GEngine->GetEngineSubsystem<UJmjProcessManager>();
-		jmjProcess->StartAlgorithm(BuildingSchema->GetAlgorithmHandle(),
-								   { FMath::Max(BuildingResolutionHorizontal, 4),
-								     FMath::Min(BuildingResolutionVertical, 4096) },
-								  { (Seed == 0) ? FMath::Rand() : Seed },
-								  AlgoTicksPerSecond, AlgorithmState);
+	    auto* mjAlgo = BuildingSchema->GetAlgorithmHandle();
+	    if (IsValid(mjAlgo))
+	    {
+	        AlgorithmState = mjAlgo->StartRunning2D(
+	            //Resolution
+	            {
+	                FMath::Max(BuildingResolutionHorizontal, 4),
+	                FMath::Min(BuildingResolutionVertical, 4096)
+	            },
+	            //Seeds
+	            {
+	                (Seed == 0) ? FMath::Rand() : Seed
+	            },
+	            //Optional initial grid
+	            { }
+	        );
+	    }
 	}
 }
 void AJmjBuilding2D::BeginDestroy()
 {
-	if (AlgorithmState.ID != 0)
-	{
-		auto* jmjProcess = GEngine->GetEngineSubsystem<UJmjProcessManager>();
-		jmjProcess->DestroyAlgoState(AlgorithmState);
-	}
+	if (IsValid(AlgorithmState))
+	    AlgorithmState->CancelRun();
 	
 	Super::BeginDestroy();
 }
@@ -84,7 +83,7 @@ void AJmjBuilding2D::Tick(float deltaSeconds)
 {
 	Super::Tick(deltaSeconds);
 
-	if (!IsFinishedGenerating && AlgorithmState.ID != 0)
+	if (!IsFinishedGenerating && IsValid(AlgorithmState))
 	{
 		auto* jmjProcess = GEngine->GetEngineSubsystem<UJmjProcessManager>();
 		if (jmjProcess->CheckAlgorithmFinished(AlgorithmState))

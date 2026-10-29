@@ -4,6 +4,8 @@ An Unreal 5 Demo and reusable plugin, for integrating [MarkovJunior.jl](https://
 See that repo for more information, but in a nutshell, MarkovJunior is an algorithm
   for procedurally generating grids -- 2D grids (images), 3D grids (voxels), and more.
 
+> *This branch matches MarkovJunior.jl's v0.3 release.*
+
 The integration plugin runs MarkovJunior.jl as a standalone exe,
   using that project's [IPC protocol](https://github.com/heyx3/MarkovJunior.jl#through-the-ipc).
 

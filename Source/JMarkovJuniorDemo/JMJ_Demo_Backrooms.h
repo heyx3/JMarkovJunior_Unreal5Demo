@@ -99,7 +99,7 @@ public:
 	TSubclassOf<ABackroomsSeal> SealPrefab;
 
 	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient, Category="State")
-	FJmjParsedAlgo JmjAlgo;
+	UMarkovJuniorAlgorithm* JmjAlgo;
 	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient, Category="State|Actors")
 	TArray<ABackroomsSeal*> Seals;
 	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient, Category="State|Actors")
@@ -188,7 +188,10 @@ class ABackroomsCell : public AActor
 public:
 
 	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient)
-	class UJmjGrid2D* GeneratedGrid = nullptr;
+	TArray<uint8> GeneratedGrid;
+    UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient)
+    FJmjIntVector2D GridResolution;
+    
 	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient)
 	FJmjIntVector2D Idx;
 	UPROPERTY(BlueprintReadOnly, Transient)

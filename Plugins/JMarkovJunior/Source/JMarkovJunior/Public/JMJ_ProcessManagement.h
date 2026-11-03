@@ -63,7 +63,9 @@ public:
     //
     //Note that state data is always X-innermost.
     //If you want the default initial state (filled with one color), pass an empty array.
-    UFUNCTION(BlueprintCallable)
+    //
+    //If no/empty array is passed for 'seeds', then a seed is chosen at random.
+    UFUNCTION(BlueprintCallable, meta=(AutoCreateRefTerm="seeds,initialValues"))
     UMarkovJuniorRunState* StartRunning2D(const FJmjIntVector2D& resolution,
                                           const TArray<int32>& seeds,
                                           const TArray<uint8>& initialValues);
@@ -71,7 +73,9 @@ public:
     //
     //Note that state data is always X-innermost.
     //If you want the default initial state (filled with one color), pass an empty array.
-    UFUNCTION(BlueprintCallable)
+    //
+    //If no/empty array is passed for 'seeds', then a seed is chosen at random.
+    UFUNCTION(BlueprintCallable, meta=(AutoCreateRefTerm="seeds,initialValues"))
     UMarkovJuniorRunState* StartRunning3D(const FIntVector& resolution,
                                           const TArray<int32>& seeds,
                                           const TArray<uint8>& initialValues);
@@ -79,7 +83,9 @@ public:
     //
     //Note that state data is always X-innermost.
     //If you want the default initial state (filled with one color), pass an empty array.
-    UFUNCTION(BlueprintCallable)
+    //
+    //If no/empty array is passed for 'seeds', then a seed is chosen at random.
+    UFUNCTION(BlueprintCallable, meta=(AutoCreateRefTerm="seeds,initialValues"))
     UMarkovJuniorRunState* StartRunning(const TArray<int>& resolution,
                                         const TArray<int32>& seeds,
                                         const TArray<uint8>& initialValues);
@@ -88,6 +94,7 @@ public:
     //"Destroys" this object from the POV of the library, preventing new algorithm runs
     //   but not affecting current ones.
     //Does not trigger GC or anything else here on the Unreal side.
+    UFUNCTION(BlueprintCallable)
     void CleanUp();
     virtual void BeginDestroy() override { if (isAlive) CleanUp(); Super::BeginDestroy(); }
 
@@ -176,7 +183,11 @@ public:
     //The subsystem will also force a cleanup as it dies,
     //  so this code needs to handle the possibility of already being dead.
     virtual void BeginDestroy() override { CancelRun(false); Super::BeginDestroy(); }
-    virtual bool IsReadyForFinishDestroy() override { return Super::IsReadyForFinishDestroy() && GetLastKnownStatus() == EMarkovJuniorRunStatus::Completed; }
+    virtual bool IsReadyForFinishDestroy() override
+    {
+        return Super::IsReadyForFinishDestroy() &&
+               (!workerThreadRunner.has_value() || GetLastKnownStatus() == EMarkovJuniorRunStatus::Completed);
+    }
     virtual void FinishDestroy() override
     {
         WaitForWorkerCleanup();

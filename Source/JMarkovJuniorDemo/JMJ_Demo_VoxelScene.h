@@ -1,6 +1,9 @@
 ﻿#pragma once
 
 #include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "Materials/MaterialInterface.h"
+#include "Components/InstancedStaticMeshComponent.h"
 
 #include "JMJ_Constants.h"
 #include "JMJ_ProcessManagement.h"
@@ -28,16 +31,13 @@ public:
 	FIntVector Resolution = { 32, 32, 32 };
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	int Seed = 654332;
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, meta=(ClampMin=1))
-	float AlgorithmTicksPerSecond = 2000.0f;
 
-	
-	//Is set to null (handle == 0) once generation is done and the voxels exist.
-	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient)
-	FJmjParsedAlgo AlgorithmParsed;
-	//Is set to null (handle == 0) once generation is done and the voxels exist.
-	UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient)
-	FJmjAlgoState AlgorithmState;
+    //Is set to null once generation is done and the voxels exist.
+    UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient)
+    UMarkovJuniorAlgorithm* AlgorithmParsed = nullptr;
+    //Is set to null once generation is done and the voxels exist.
+    UPROPERTY(BlueprintReadOnly, VisibleInstanceOnly, Transient)
+    UMarkovJuniorRunState* AlgorithmState = nullptr;
 	UPROPERTY(BlueprintReadOnly, EditInstanceOnly, Transient)
 	TArray<UInstancedStaticMeshComponent*> ISMsByCellValue;
 	UPROPERTY(BlueprintReadOnly, EditInstanceOnly, Transient)
@@ -45,7 +45,7 @@ public:
 
 
 	UFUNCTION(BlueprintCallable, BlueprintPure)
-	bool IsStillGenerating() const { return !AlgorithmState.IsNull(); }
+	bool IsStillGenerating() const { return IsValid(AlgorithmState); }
 	
 
 	AJmjDemoVoxelScene();
@@ -55,7 +55,7 @@ public:
 
 private:
 
-	void MeshGrid(class UJmjGrid3D* grid);
+	void MeshGrid(const TArray<uint8>& pixels, const FIntVector& resolution);
 	
 	UPROPERTY()
 	UStaticMesh* EngineCubeMesh;

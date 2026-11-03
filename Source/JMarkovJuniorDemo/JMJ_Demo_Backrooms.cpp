@@ -11,8 +11,6 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "GameFramework/GameModeBase.h"
 
-#include "JMJ_Grids.h"
-
 
 namespace BackroomsJmjAlgo
 {
@@ -126,16 +124,11 @@ void UBackrooms_GM_Component::BeginPlay()
 		UE_LOG(LogJMarkovJunior, Warning, TEXT("CellResolution was increased to the min value of 4"));
 	}
 	
-	//Ensure the JMarkovJunior worker process is up and running.
-	auto* jmj = GEngine->GetEngineSubsystem<UJmjProcessManager>();
-	if (!jmj->WaitForProcess())
-		UE_LOG(LogJMarkovJunior, Error, TEXT("JMJ process not found! Backrooms won't generate :("));
-
 	//Parse our algorithm.
-	FString jmjErrorMsg;
-	if (!jmj->ParseAlgorithm(BackroomsJmjAlgo::SrcGenWalls, jmjErrorMsg, JmjAlgo))
-		UE_LOG(LogJMarkovJunior, Error, TEXT("JMJ algorithm failed to parse:\n%s"), *jmjErrorMsg);
-	
+    JmjAlgo = UMarkovJuniorAlgorithm::Parse(BackroomsJmjAlgo::SrcGenWalls);
+	check(JmjAlgo);
+
+    //Immediately generate the player's starting area.
 	LoadCell({ 0, 0 });
 }
 void UBackrooms_GM_Component::EndPlay(const EEndPlayReason::Type reason)
@@ -168,18 +161,16 @@ bool UBackrooms_GM_Component::GetRandomEmptyPos(const FJmjIntVector2D& cell2D,
 	if (!tryCell)
 		return false;
 	auto* cell = *tryCell;
-
+    
 	auto emptyCellID = UJmjConstants::GetCellValueByID(BackroomsJmjAlgo::CharEmpty);
-	checkSlow(cell->GeneratedGrid->ForEach([&](int flatIdx, const FJmjIntVector2D& idx, uint8 val)
-	{
-		return val == emptyCellID;
-	}));
+    checkf(Algo::AnyOf(cell->GeneratedGrid, [&](uint8 c) { return c == emptyCellID; }),
+           TEXT("The entire cell is solid wall!"));
 
-	//In practice, at least half of cells are empty, so keep trying them at random.
+	//In practice at least half of cells are empty, so just select random cells until we hit on empty.
 	do
 	{
 		outLocalPixel = { FMath::RandRange(0, CellResolution-1), FMath::RandRange(0, CellResolution-1) };
-	} while (cell->GeneratedGrid->ByteAt(outLocalPixel) != emptyCellID);
+	} while (cell->GeneratedGrid[outLocalPixel.X + (CellResolution * outLocalPixel.Y)] != emptyCellID);
 
 	outWorldFloorPos = PixelIdxToWorldFloorPos(
 		{ outLocalPixel.X + (cell2D.X * CellResolution),
@@ -212,8 +203,8 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 	spawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 	
 	//Seed the level generator.
-	auto* jmjGrid = NewObject<UJmjGrid2D>(spawnParams.Owner);
-	jmjGrid->InitializeWithResolution({ CellResolution, CellResolution });
+    TArray<uint8> initialGrid;
+    initialGrid.SetNum(CellResolution * CellResolution);
 	//Most of the grid is indeterminate, but each edge needs to be fixed so cells know how to line up.
 	int maxPossibleEntryways = (CellResolution - 2) / 3; //Every other edge pixel excluding corners
 	int nMinEntryways = FMath::Clamp(MinEdgeConnections, 1, maxPossibleEntryways),
@@ -224,7 +215,8 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 		 cellValueForcedEmpty = UJmjConstants::GetCellValueByID(BackroomsJmjAlgo::CharForcedEmpty),
 		 cellValueLight = UJmjConstants::GetCellValueByID(BackroomsJmjAlgo::CharLight);
 	//First fill the grid with indeterminate values.
-	jmjGrid->ForEach([&](int flatIdx, const auto& vIdx, uint8& value) { value = cellValueWall; });
+    for (int i = 0; i < initialGrid.Num(); ++i)
+        initialGrid[i] = cellValueWall;
 	//Next, fill each edge with forced values.
 	bufferIdx2DMap.Empty(); //Maps local index of an entryway to the index of the neighboring cell
 	for (bool isVertical : std::to_array({ false, true }))
@@ -247,7 +239,10 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 			
 			//First fill the whole edge with walls.
 			for (int i = 0; i < CellResolution; ++i)
-				jmjGrid->ByteAt(getEdgeVIdx(i).Get<0>()) = cellValueForcedWall;
+			{
+			    auto edgePos = getEdgeVIdx(i).Get<0>();
+			    initialGrid[edgePos.X + (CellResolution * edgePos.Y)] = cellValueForcedWall;
+			}
 
 
 			//Now add random entryways.
@@ -282,7 +277,7 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 
 				//Add that position as an entryway.
 				auto entryPos = getEdgeVIdx(posAlong).Get<0>();
-				jmjGrid->ByteAt(entryPos) = cellValueForcedEmpty;
+			    initialGrid[entryPos.X + (CellResolution * entryPos.Y)] = cellValueForcedEmpty;
 				bufferIdx2DMap.Add(entryPos, neighborCellIdx);
 				bufferIntegerSet.Remove(posAlong);
 				bufferIntegerSet.Remove(posAlong - 1);
@@ -291,31 +286,17 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 		}
 	}
 	UE_LOG(LogJMarkovJunior, Log, TEXT("Initial state of cell {%i, %i}: %s"),
-		   cellIdx.X, cellIdx.Y, *UJmjConstants::FormatCellGrid(jmjGrid->GetBytes(), { jmjGrid->GetResolution().X, jmjGrid->GetResolution().Y }));
+		   cellIdx.X, cellIdx.Y,
+		   *UJmjConstants::FormatCellGrid(initialGrid, { CellResolution, CellResolution }));
 	
 	//Generate the cell contents.
-	if (!jmjGrid->SeedAndDownloadAlgorithmRun(JmjAlgo, { cellIdx.X, cellIdx.Y, Seed }))
-	{
-		UE_LOG(LogJMarkovJunior, Error,
-			   TEXT("Failed to generate cell {%i, %i}, so it will be left wide open!"),
-			   cellIdx.X, cellIdx.Y);
-		jmjGrid->ForEach([&](int flatIdx, const auto& gridIdx, auto& gridByte)
-		{
-			if (FMath::Min(gridIdx.X, gridIdx.Y) == 0 || FMath::Max(gridIdx.X, gridIdx.Y) == CellResolution-1)
-				if (bufferIdx2DMap.Contains(gridIdx))
-					gridByte = cellValueEmpty;
-				else
-					gridByte = cellValueWall;
-			else
-				if (((gridIdx.X + gridIdx.Y) % 3) == 0)
-					gridByte = cellValueLight;
-				else
-					gridByte = cellValueEmpty;
-		});
-	}
-	UE_LOG(LogJMarkovJunior, Log, TEXT("Final state of cell {%i, %i}: %s"),
-		   cellIdx.X, cellIdx.Y, *UJmjConstants::FormatCellGrid(jmjGrid->GetBytes(), { jmjGrid->GetResolution().X, jmjGrid->GetResolution().Y }));
-
+    auto* result = JmjAlgo->StartRunning2D({ CellResolution, CellResolution }, { Seed }, initialGrid);
+    check(result);
+    result->WaitForEvent(true); //Hangs the game thread until complete -- not ideal, but fine for a demo.
+    UE_LOG(LogJMarkovJunior, Log, TEXT("Final state of cell {%i, %i}: %s"),
+           cellIdx.X, cellIdx.Y,
+           *UJmjConstants::FormatCellGrid(result->LastKnownPixels, result->GetLastKnownResolution()));
+    
 	//Spawn the cell actor.
 	FTransform cellTr{
 		FQuat::Identity,
@@ -327,46 +308,54 @@ bool UBackrooms_GM_Component::LoadCell(const FJmjIntVector2D& cellIdx)
 		GetOwner(), nullptr,
 		ESpawnActorCollisionHandlingMethod::AlwaysSpawn
 	);
-	cell->GeneratedGrid = jmjGrid;
+	cell->GeneratedGrid = MoveTemp(result->LastKnownPixels);
+    cell->GridResolution = result->GetLastKnownResolution2D();
+    result->CancelRun(); //Not needed anymore, pixels have been moved into the cell object
 	cell->Idx = cellIdx;
 	cell->FinishSpawning(cellTr, true);
 	if (IsValid(Origin))
 		cell->AttachToComponent(Origin, FAttachmentTransformRules::KeepRelativeTransform);
 
 	//Spawn the cell pieces.
-	jmjGrid->ForEach([&](int flatIdx, const auto& localPixel, auto gridValue)
-	{
-		if (gridValue == cellValueWall || gridValue == cellValueForcedWall)
-		{
-			cell->ServerInstanceLocations.Emplace(localPixel.X * PixelLength, localPixel.Y * PixelLength, 0);
-		}
-		else if (gridValue == cellValueLight && IsValid(CeilingLightPrefab))
-		{
-			UE_LOG(LogJMarkovJunior, Log, TEXT("Light at local={%i, %i}"), localPixel.X, localPixel.Y);
+    int flatIdx = 0;
+    for (int y = 0; y < CellResolution; ++y)
+        for (int x = 0; x < CellResolution; ++x)
+        {
+            FJmjIntVector2D localPixel{ x, y };
+            auto gridValue = cell->GeneratedGrid[flatIdx];
+            flatIdx += 1;
+            
+		    if (gridValue == cellValueWall || gridValue == cellValueForcedWall)
+		    {
+			    cell->ServerInstanceLocations.Emplace(localPixel.X * PixelLength, localPixel.Y * PixelLength, 0);
+		    }
+		    else if (gridValue == cellValueLight && IsValid(CeilingLightPrefab))
+		    {
+			    UE_LOG(LogJMarkovJunior, Log, TEXT("Light at local={%i, %i}"), localPixel.X, localPixel.Y);
 
-			//Rotate the light if we're in a hallway going along X.
-			float rotDegrees = 0;
-			if (localPixel.Y > 0 && localPixel.Y < CellResolution-1 &&
-				jmjGrid->ByteAt({ localPixel.X, localPixel.Y - 1 }) == cellValueWall &&
-				jmjGrid->ByteAt({ localPixel.X, localPixel.Y + 1 }) == cellValueWall)
-			{
-				rotDegrees = 90;
-			}
-			
-			auto lightTr = UKismetMathLibrary::ComposeTransforms(
-				FTransform{
-					FRotator{ 0, rotDegrees, 0 },
-					FVector{
-						(localPixel.X + 0.5f) * PixelLength,
-						(localPixel.Y + 0.5f) * PixelLength,
-						PixelHeight - 4.0f
-					}
-				},
-				cellTr
-			);
-			CeilingLights.Add(world->SpawnActor<AActor>(CeilingLightPrefab, lightTr, spawnParams));
-		}
-	});
+			    //Rotate the light if we're in a hallway going along X.
+			    float rotDegrees = 0;
+			    if (localPixel.Y > 0 && localPixel.Y < CellResolution-1 &&
+			        cell->GeneratedGrid[localPixel.X + (CellResolution * (localPixel.Y - 1))] == cellValueWall &&
+			        cell->GeneratedGrid[localPixel.X + (CellResolution * (localPixel.Y + 1))] == cellValueWall)
+			    {
+				    rotDegrees = 90;
+			    }
+			    
+			    auto lightTr = UKismetMathLibrary::ComposeTransforms(
+				    FTransform{
+					    FRotator{ 0, rotDegrees, 0 },
+					    FVector{
+						    (localPixel.X + 0.5f) * PixelLength,
+						    (localPixel.Y + 0.5f) * PixelLength,
+						    PixelHeight - 4.0f
+					    }
+				    },
+				    cellTr
+			    );
+			    CeilingLights.Add(world->SpawnActor<AActor>(CeilingLightPrefab, lightTr, spawnParams));
+		    }
+    	}
 	cell->FinalizeWallMeshInstances();
 	ActiveCells.Add(cellIdx, cell); 
 	

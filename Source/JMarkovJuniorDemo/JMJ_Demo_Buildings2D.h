@@ -77,8 +77,6 @@ public:
 	int BuildingResolutionHorizontal = 8;
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
 	int BuildingResolutionVertical = 32;
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float AlgoTicksPerSecond = 1000;
 	//Set on spawn, or leave at 0 to randomize.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
 	int Seed = 0;
@@ -102,5 +100,5 @@ protected:
 
 private:
 
-	void MeshVoxels(const TArray<uint8>& bytes, const FIntPoint& resolution);
+	void MeshVoxels(const TArray<uint8>& bytes, const FJmjIntVector2D& resolution);
 };

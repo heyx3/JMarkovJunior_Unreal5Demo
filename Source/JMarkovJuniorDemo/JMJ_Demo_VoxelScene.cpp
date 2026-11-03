@@ -3,8 +3,6 @@
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 
-#include "JMJ_Grids.h"
-
 
 AJmjDemoVoxelScene::AJmjDemoVoxelScene()
 {
@@ -51,57 +49,53 @@ void AJmjDemoVoxelScene::BeginPlay()
 	}
 
 	//Start running the JMJ algorithm.
-	auto* jmjProc = GEngine->GetEngineSubsystem<UJmjProcessManager>();
-	check(jmjProc);
-	FString parseError;
-	if (!jmjProc->ParseAlgorithm(AlgorithmSrc, parseError, AlgorithmParsed))
-	{
-		UE_LOG(LogJMarkovJunior, Error, TEXT("Failed to compile algorithm from %s: %s"),
-			   *GetFullName(), *parseError);
-	}
-	else
-	{
-		if (!jmjProc->StartAlgorithm(AlgorithmParsed, { Resolution.X, Resolution.Y, Resolution.Z },
-									 { Seed }, AlgorithmTicksPerSecond, AlgorithmState))
-		{
-			UE_LOG(LogJMarkovJunior, Error, TEXT("Failed to start algorithm from %s"), *GetFullName());
-		}
-	}
+    AlgorithmParsed = UMarkovJuniorAlgorithm::Parse(AlgorithmSrc);
+    if (AlgorithmParsed)
+        AlgorithmState = AlgorithmParsed->StartRunning3D(Resolution, { Seed }, { });
 }
 void AJmjDemoVoxelScene::EndPlay(const EEndPlayReason::Type reason)
 {
 	//Clean up JMJ resources.
-	auto* jmjProc = GEngine->GetEngineSubsystem<UJmjProcessManager>();
-	check(jmjProc);
-	if (!AlgorithmState.IsNull())
-		jmjProc->DestroyAlgoState(AlgorithmState);
-	if (!AlgorithmParsed.IsNull())
-		jmjProc->DestroyAlgorithm(AlgorithmParsed);
-	
+    if (AlgorithmState)
+        AlgorithmState->CancelRun();
+    if (AlgorithmParsed)
+        AlgorithmParsed->CleanUp();
+    
 	Super::EndPlay(reason);
 }
 void AJmjDemoVoxelScene::Tick(float deltaSeconds)
 {
 	Super::Tick(deltaSeconds);
 
-	if (!AlgorithmState.IsNull())
+	if (AlgorithmState && AlgorithmState->GetLastKnownStatus() == EMarkovJuniorRunStatus::Completed)
 	{
-		auto* jmjProc = GEngine->GetEngineSubsystem<UJmjProcessManager>();
-		check(jmjProc);
+	    MeshGrid(AlgorithmState->LastKnownPixels, AlgorithmState->GetLastKnownResolution3D());
+        
+	    AlgorithmState->CancelRun();
+        AlgorithmState = nullptr;
 
-		if (jmjProc->CheckAlgorithmFinished(AlgorithmState))
-		{
-			auto* grid = UJmjGrid3D::CreateFromAlgorithmState(AlgorithmState);
-			jmjProc->DestroyAlgoState(AlgorithmState);
-			jmjProc->DestroyAlgorithm(AlgorithmParsed);
-			MeshGrid(grid);
-		}
+	    AlgorithmParsed->CleanUp();
+	    AlgorithmParsed = nullptr;
 	}
 }
 
-void AJmjDemoVoxelScene::MeshGrid(UJmjGrid3D* grid)
+void AJmjDemoVoxelScene::MeshGrid(const TArray<uint8>& pixels, const FIntVector& resolution)
 {
-	//Strings by default are 
+    auto getFlatIdx = [&](const FIntVector& idx) { return idx.X + (resolution.X * (idx.Y + (resolution.Y * idx.Z))); };
+    auto byteAt = [&](const FIntVector& idx) { return pixels[getFlatIdx(idx)]; };
+    auto forEach = [&](auto&& toDo)
+    {
+        int i = 0;
+        for (int z = 0; z < resolution.Z; ++z)
+            for (int y = 0; y < resolution.Y; ++y)
+                for (int x = 0; x < resolution.X; ++x)
+                {
+                    toDo({ x, y, z }, i, pixels[i]);
+                    i += 1;
+                }
+    };
+    
+	//Strings by default are case-insensitive :(
 	TMap<FString, UMaterialInterface*, FDefaultSetAllocator, FLocKeyMapFuncs<UMaterialInterface*>> cellMaterials;
 	for (const auto& [k, v] : CellMaterials)
 		cellMaterials.Add(k, v);
@@ -126,12 +120,12 @@ void AJmjDemoVoxelScene::MeshGrid(UJmjGrid3D* grid)
 		cellTypeMaterials[i] = foundMaterial ? *foundMaterial : nullptr;
 		isCellTypeOpaque[i] = foundMaterial && (*foundMaterial)->GetBlendMode() == BLEND_Opaque;
 	}
-	auto isCellOpaque = [&](const FIntVector& vIdx) { return isCellTypeOpaque[grid->ByteAt(vIdx)]; };
+	auto isCellOpaque = [&](const FIntVector& vIdx) { return isCellTypeOpaque[byteAt(vIdx)]; };
 
 	//Track which cells are irrelevant -- eligible to be taken by any part of the greedy mesher.
 	TArray<bool> isCellIrrelevant;
-	isCellIrrelevant.SetNumUninitialized(grid->GetBytes().Num());
-	grid->ForEach([&](int flatIdx, const FIntVector& vIdx, uint8 val)
+	isCellIrrelevant.SetNumUninitialized(pixels.Num());
+	forEach([&](const FIntVector& vIdx, int flatIdx, uint8 val)
 	{
 		isCellIrrelevant[flatIdx] =
 			vIdx.X > 0 && vIdx.Y > 0 && vIdx.Z > 0 &&
@@ -166,8 +160,8 @@ void AJmjDemoVoxelScene::MeshGrid(UJmjGrid3D* grid)
 	//Use greedy meshing: find each new spot, grow it as much as possible,
 	//  and draw that space as one big cube instance.
 	TArray<bool> isCellProcessed;
-	isCellProcessed.SetNumZeroed(grid->GetBytes().Num());
-	grid->ForEach([&](int flatIdx, const FIntVector& idx3D, uint8 cellValue)
+	isCellProcessed.SetNumZeroed(pixels.Num());
+	forEach([&](const FIntVector& idx3D, int flatIdx, uint8 cellValue)
 	{
 		if (isCellProcessed[flatIdx] || isCellIrrelevant[flatIdx] || cellTypeMaterials[cellValue] == nullptr)
 			return;
@@ -186,8 +180,8 @@ void AJmjDemoVoxelScene::MeshGrid(UJmjGrid3D* grid)
 					v[axisHorz1] = iHorz1;
 					v[axisHorz2] = iHorz2;
 					
-					int i = grid->GetFlatIdx(v);
-					if (isCellProcessed[i] || (grid->ByteAt(v) != cellValue || !isCellIrrelevant[i]))
+					int i = getFlatIdx(v);
+					if (isCellProcessed[i] || (byteAt(v) != cellValue || !isCellIrrelevant[i]))
 						return false;
 				}
 			}
@@ -224,7 +218,7 @@ void AJmjDemoVoxelScene::MeshGrid(UJmjGrid3D* grid)
 			for (int y = boxMin.Y; y <= boxMax.Y; ++y)
 				for (int x = boxMin.X; x <= boxMax.X; ++x)
 				{
-					int i = grid->GetFlatIdx({ x, y, z });
+					int i = getFlatIdx({ x, y, z });
 					checkSlow(!isCellProcessed[i]);
 					isCellProcessed[i] = true;
 				}

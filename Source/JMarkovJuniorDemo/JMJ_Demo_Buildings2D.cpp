@@ -83,22 +83,16 @@ void AJmjBuilding2D::Tick(float deltaSeconds)
 {
 	Super::Tick(deltaSeconds);
 
-	if (!IsFinishedGenerating && IsValid(AlgorithmState))
+	if (!IsFinishedGenerating && IsValid(AlgorithmState) && AlgorithmState->GetLastKnownStatus() == EMarkovJuniorRunStatus::Completed)
 	{
-		auto* jmjProcess = GEngine->GetEngineSubsystem<UJmjProcessManager>();
-		if (jmjProcess->CheckAlgorithmFinished(AlgorithmState))
-		{
-			static TArray<uint8> voxelBytes;
-			static TArray<int> voxelResolution;
-			jmjProcess->DownloadGrid(AlgorithmState, voxelResolution, voxelBytes);
-			check(voxelResolution.Num() == 2);
+	    IsFinishedGenerating = true;
+	    AlgorithmState->CancelRun(); //Immediate cleanup of worker thread; note that grid is still readable
 
-			IsFinishedGenerating = true;
-			MeshVoxels(voxelBytes, { voxelResolution[0], voxelResolution[1] });
-		}
+	    MeshVoxels(AlgorithmState->LastKnownPixels, AlgorithmState->GetLastKnownResolution2D());
+	    AlgorithmState = nullptr;
 	}
 }
-void AJmjBuilding2D::MeshVoxels(const TArray<uint8>& bytes, const FIntPoint& resolution)
+void AJmjBuilding2D::MeshVoxels(const TArray<uint8>& bytes, const FJmjIntVector2D& resolution)
 {
 	//Allocate buffers for the instance transforms.
 	static TArray<FTransform> trMetalBody, trMetalDetails, trSignalLights, trWindowLights;

@@ -18,6 +18,9 @@ namespace jmj { namespace ipc {
 
     constexpr uint32_t StdoutStartCode = 42;
     constexpr uint32_t StdoutStopCode = 999;
+
+    //Tagged events whose name starts with this char let you write to the grid while paused.
+    inline constexpr char8_t MutableEventPrefix = u8'!';
 } }
 
 #endif

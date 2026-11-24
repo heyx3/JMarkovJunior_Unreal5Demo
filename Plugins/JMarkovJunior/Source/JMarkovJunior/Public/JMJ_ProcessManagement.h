@@ -154,7 +154,7 @@ public:
     UFUNCTION(BlueprintCallable, BlueprintPure)
     FIntVector GetLastKnownResolution3D() const;
 
-    //Waits on the calling thread (usually the game thread),
+    //Waits on the calling thread (in BP, the game thread),
     //  until this run finishes or hits a tagged event.
     //Returns the new status of this run (Completed or TaggedEvent).
     //
